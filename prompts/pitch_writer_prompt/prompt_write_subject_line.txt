@@ -1,0 +1,8 @@
+Write a subject line for an email.
+The subject line should be: "Great episode about {topic}"
+
+Here is a summary of the episode, determine what the topic was and include it in your subject line:
+{Summary}
+{AI Summary}
+
+Give ONLY one subject line as your only output.

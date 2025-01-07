@@ -1,0 +1,38 @@
+Please carefully read through this podcast transcript in its entirety before beginning any of the tasks:
+
+<transcript>
+{transcription}
+</transcript>
+
+Based solely on the information provided in the transcript above, please complete the following tasks:
+
+1. Essay-style Summary
+Write a 500-word blog post style summary of the entire podcast episode. Focus on capturing the main topics, key points, and overall narrative flow of the conversation.    
+
+2. Intro
+Identify the section of the podcast where the host introduces the guest. Transcribe this section verbatim, including the guest's name, company, role, and any additional background or biographical details provided.
+
+3. Interview
+Create a comprehensive outline of all the important questions asked by the host and a summary of the corresponding answers provided by the guest throughout the podcast. Use the following format for each line:
+Q: [Question asked by host]
+A: [Summary of answer provided by guest]
+Do not limit the number of questions. Aim to capture every important question and answer exchange.
+
+4. Problems and Solutions
+Identify each specific problem discussed during the podcast along with the corresponding solution proposed by the guest. For each problem-solution pair, provide a detailed description of the problem context and a summary of the proposed solution. Use the following format:
+Problem: [Detailed description of the problem]
+Solution: [Summary of the explanation of the proposed solution]
+
+5. Topics Discussed
+List out all the main topics discussed during the podcast. For each topic, provide a detailed summary of the key points made by both the host and the guest. Use the following format:
+Topic 1: [Topic Name]
+[Detailed summary of the discussion on this topic, including key points made by the host and guest]
+
+Topic 2: [Topic Name]
+[Detailed summary of the discussion on this topic, including key points made by the host and guest]
+
+...
+
+Continue listing topics and their respective summaries until all main topics have been covered.
+
+Please organize your outputs with clear headings and sections corresponding to each of the 5 tasks. Remember to base your responses solely on the information provided in the transcript.

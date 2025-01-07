@@ -1,0 +1,25 @@
+It was determined that your client {Name (from Client)} would be a good fit to be pitched as a guest the following podcast: {Podcast Name}. 
+
+You will be provided with your client's bio and speaking angles, as well as information about different episodes for the podcast.
+Determine which episode will be the best to use to refference to in a pitch to the podcast host. We are looking for a podcast episode where something was said that our client could respond to using something in his bio or using one of his speaking angles.
+
+As output, give ONLY the Episode ID for the episode that will be the best to refference in the pitch.
+
+<client_bio>
+{TextBio}
+</client_bio>
+
+<client_angles>
+{TextAngles}
+</client_angles>
+
+<podcast_episode>
+{text}
+</podcast_episode>
+
+Give your output containing ONLY the selected Episode ID in JSON:
+<output_example>
+{
+ID=
+}
+</output_example>

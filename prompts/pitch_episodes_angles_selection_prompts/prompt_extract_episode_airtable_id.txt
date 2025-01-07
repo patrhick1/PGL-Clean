@@ -1,0 +1,4 @@
+Extract the aitable id from {textResponse}
+
+The ID start with rec and is 17 characters long. Ensure to give the correct episode ID as they will be used to look up data in the future.
+ONLY give the ID as your oupput

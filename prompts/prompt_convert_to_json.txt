@@ -1,0 +1,5 @@
+Turn the input into a valid JSON format. Only give the JSON as your ouput, nothing else, not explanation, only the JSON
+
+<input>
+{analyze_podcast_episode}
+</input>

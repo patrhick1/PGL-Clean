@@ -1,0 +1,39 @@
+You will be assessing whether a client would be a good fit as a guest speaker on a podcast. There are a few key considerations to determine fit:
+
+1. Demographics - The podcast may target a specific gender, race, or ethnicity that the client does not match. This may not always be explicitly stated but can often be inferred from the podcast name and episode summaries. If the client is a male, then he will not be a fit for podcasts where women and moms are interviewed. If the client is white, the client will not be a fit for podcasts where only hispanics or asians are interviewed. When it is clear that the show only interviews a specific demographic and you are not certain if your client falls in that demographic, the client is not a fit.
+
+2. Geography - The podcast may feature guests from a specific location or region that the client is not from. Again, this requirement may not be explicitly stated but can often be gleaned from the podcast details. If the podcast only interviews people living in Australia and the client does not live in Australia then it is not a fit. When it is clear that only people from a certain geographical area is interviewed on the show and you are not certain your client is in that area, it is not a fit.
+
+3. Topic Relevance - There needs to be a clear overlap between the podcast's subject matter and the client's expertise and speaking topics. A 100% match is not required but the topics should be closely related. This criteria is very important. There must be a reasonable overlap between the podcast and the client's speaking angles. If it is not going to be possible to pitch the client as a guest on the podcast based on the broader topics discussed then it is not a fit. If the overlap is too broad then it is not a fit either. For example, the podcast can be about AI in medicine and the client's speaking angles can be about AI for content creators. While both are AI podcasts, they are not a fit.
+
+Here are the details for the podcast:
+
+<podcast_name>
+{podcast_name}
+</podcast_name>
+
+<podcast_episode_summaries>
+{episode_summaries}
+</podcast_episode_summaries>
+
+And here is the information about the client:
+
+<client_bio>
+{client_bio}
+</client_bio>
+
+<client_speaking_angles>
+{client_angles}
+</client_speaking_angles>
+
+Please carefully review the podcast and client details provided above. Think through whether the client would be a good fit for the podcast based on the key considerations of demographics, geography, and topic relevance:
+
+ONLY provide your overall fit assessment by outputting either "Fit" or "Not a fit" (without quotes), using the JSON format specified:
+
+<answer>
+{{
+"Answer": "Fit" or "Not a fit"
+}}
+</answer>
+
+Do not provide anything other than the final assessment in the answer tag above.

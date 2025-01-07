@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Automation Dashboard</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Automation Dashboard</h1>
+        <div class="button-grid">
+            <button onclick="triggerAutomation('generate_bio_angles')">Bio and Angles Generation</button>
+            <button onclick="triggerAutomation('mipr_podcast_search')">MIPR Podcast Search - API</button>
+            <button onclick="triggerAutomation('summary_host_guest')">Summary, Host and Guest Identification</button>
+            <button onclick="triggerAutomation('determine_fit')">Determine Fit</button>
+            <button onclick="triggerAutomation('pitch_episode_angle')">Pitch Episode and Angle Selection</button>
+            <button onclick="triggerAutomation('pitch_writer')">Pitch Writer</button>
+            <button onclick="triggerAutomation('send_pitch')">Send Pitch to Instantly</button>
+        </div>
+    </div>
+
+    <script>
+        function triggerAutomation(action) {
+            fetch(`/trigger/${action}`, { method: 'POST' })
+                .then(response => response.json())
+                .then(data => alert(data.message))
+                .catch(error => alert("Error triggering automation: " + error));
+        }
+    </script>
+</body>
+</html>

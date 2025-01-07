@@ -1,0 +1,24 @@
+Podcast Guest Launch License Agreement
+
+Copyright © 2025 3rd Brain Digital Operation. All rights reserved.
+
+Permission is hereby granted, free of charge, to access this software solely 
+for personal or internal business purposes under the following conditions:
+
+1. **Ownership and Restrictions**:
+   - The software and associated documentation files ("Software") are owned by 3rd Brain Digital Operation.
+   - You may not modify, reproduce, distribute, sublicense, or sell copies of the Software, in whole or in part, without express written permission from 3rd Brain Digital Operation.
+
+2. **Prohibited Use**:
+   - The Software may not be used for any commercial purposes outside your organization without prior agreement.
+   - Reverse engineering, decompiling, or disassembling the Software is strictly prohibited.
+
+3. **Disclaimer of Warranty**:
+   - The Software is provided "AS IS," without any express or implied warranties, including but not limited to warranties of merchantability or fitness for a particular purpose.
+
+4. **Limitation of Liability**:
+   - In no event shall 3rd Brain Digital Operation be liable for any damages, including incidental, indirect, or consequential damages, arising out of or related to the use or inability to use the Software.
+
+For permission or inquiries, contact:
+3rd Brain Digital Operation
+paschal@3rdbrain.co
