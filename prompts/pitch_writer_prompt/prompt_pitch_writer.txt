@@ -55,7 +55,7 @@ Element 7: Call to action. Use the following exact wording: If you’re interest
 
 Leave a line open between element 7 and element 8.
 
-Element 8: Greeting. Use the exact wording. Thanks, Martin.
+Element 8: Greeting. Use the exact wording. Thanks, Aidrian.
 </pitch_structure>
 
 As your output, give only the pitch and nothing else.

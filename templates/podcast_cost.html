@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Podcast AI Usage Cost Report</title>
+    <link rel="stylesheet" href="/static/dashboard.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-button">Back to Dashboard</a>
+        
+        <div class="header">
+            <h1>Podcast AI Usage Cost Report</h1>
+            <p>Record ID: <span id="podcast-id">{{ podcast_id }}</span></p>
+        </div>
+        
+        <div class="summary-cards">
+            <div class="card">
+                <h2>Total Cost</h2>
+                <div class="value" id="total-cost">${{ total_cost|round(6) }}</div>
+                <div class="description">Estimated cost in USD</div>
+            </div>
+            
+            <div class="card">
+                <h2>API Calls</h2>
+                <div class="value" id="total-calls">{{ total_calls }}</div>
+                <div class="description">Number of API requests</div>
+            </div>
+            
+            <div class="card">
+                <h2>Total Tokens</h2>
+                <div class="value" id="total-tokens">{{ total_tokens|format_number }}</div>
+                <div class="token-breakdown">
+                    <div class="token-input">Input: {{ total_tokens_in|format_number }}</div>
+                    <div class="token-output">Output: {{ total_tokens_out|format_number }}</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>Workflow Stage Breakdown</h2>
+            <div style="margin-bottom: 20px;">
+                <canvas id="workflowChart" height="300"></canvas>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Workflow Stage</th>
+                        <th>API Calls</th>
+                        <th>Input Tokens</th>
+                        <th>Output Tokens</th>
+                        <th>Total Tokens</th>
+                        <th>Cost</th>
+                    </tr>
+                </thead>
+                <tbody id="workflow-table">
+                    {% for workflow, data in workflow_stages.items() %}
+                    <tr>
+                        <td>{{ workflow }}</td>
+                        <td>{{ data.calls }}</td>
+                        <td>{{ data.tokens_in|format_number }}</td>
+                        <td>{{ data.tokens_out|format_number }}</td>
+                        <td>{{ data.total_tokens|format_number }}</td>
+                        <td><span class="cost-pill">${{ data.cost|round(6) }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="section">
+            <h2>Timeline of Operations</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Workflow</th>
+                        <th>Model</th>
+                        <th>Input Tokens</th>
+                        <th>Output Tokens</th>
+                        <th>Total Tokens</th>
+                        <th>Cost</th>
+                    </tr>
+                </thead>
+                <tbody id="timeline-table">
+                    {% for entry in timeline %}
+                    <tr>
+                        <td>{{ entry.timestamp|format_datetime }}</td>
+                        <td>{{ entry.workflow }}</td>
+                        <td>{{ entry.model }}</td>
+                        <td>{{ entry.tokens_in|format_number }}</td>
+                        <td>{{ entry.tokens_out|format_number }}</td>
+                        <td>{{ entry.total_tokens|format_number }}</td>
+                        <td><span class="cost-pill">${{ entry.cost|round(6) }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Workflow Stage Chart
+            const workflowCtx = document.getElementById('workflowChart').getContext('2d');
+            
+            // Extract data from the server-rendered template
+            const workflows = [];
+            const costs = [];
+            const inputTokens = [];
+            const outputTokens = [];
+            
+            document.querySelectorAll('#workflow-table tr').forEach(row => {
+                const cells = row.querySelectorAll('td');
+                if (cells.length > 0) {
+                    workflows.push(cells[0].textContent);
+                    inputTokens.push(parseInt(cells[2].textContent.replace(/,/g, '')));
+                    outputTokens.push(parseInt(cells[3].textContent.replace(/,/g, '')));
+                    costs.push(parseFloat(cells[5].textContent.replace('$', '')));
+                }
+            });
+            
+            new Chart(workflowCtx, {
+                type: 'bar',
+                data: {
+                    labels: workflows,
+                    datasets: [
+                        {
+                            label: 'Input Tokens',
+                            data: inputTokens,
+                            backgroundColor: '#e8f4fd',
+                            borderColor: '#2980b9',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Output Tokens',
+                            data: outputTokens,
+                            backgroundColor: '#e8fdea',
+                            borderColor: '#27ae60',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        title: {
+                            display: true,
+                            text: 'Token Usage by Workflow Stage'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Number of Tokens'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Workflow Stage'
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html> 

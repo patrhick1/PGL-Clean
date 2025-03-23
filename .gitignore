@@ -1,1 +1,60 @@
-".env" 
+# Sensitive Configuration Files
+.env
+*.env
+service-account-key.json
+token.json
+credentials.json
+
+# Data Files
+*.csv
+ai_usage_logs.csv
+ai_usage_logs_backup.csv
+last_processed_time.txt
+
+# Logs
+*.log
+transcriber.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual Environment
+pgl_env/
+env/
+venv/
+ENV/
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# Replit specific
+.replit
+replit.nix
+.config/
+
+# Build and distribution
+build/
+dist/
+*.egg-info/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Temporary files
+tmp/
+temp/ 

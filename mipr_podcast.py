@@ -1,17 +1,17 @@
 import logging
 from airtable_service import PodcastService
 from openai_service import OpenAIService
-from external_api_service import ListenNote
-from data_processor import DataProcessor
+from external_api_service import ListenNote, PodscanFM
+from data_processor import DataProcessor, parse_date
+from datetime import datetime, timedelta
 
 # Set up logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s'
-)
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 
-def process_mipr_podcast_search(record_id):
+
+def process_mipr_podcast_search_listennotes(record_id):
     # Initialize services
     airtable_service = PodcastService()
     openai_service = OpenAIService()
@@ -21,7 +21,8 @@ def process_mipr_podcast_search(record_id):
     try:
         # Fetch the campaign record from Airtable
         logger.info(f"Fetching record {record_id} from Airtable...")
-        campaign_record = airtable_service.get_record('Campaigns', record_id)['fields']
+        campaign_record = airtable_service.get_record('Campaigns',
+                                                      record_id)['fields']
         logger.info("Record successfully retrieved.")
     except Exception as e:
         logger.error(f"Error retrieving record from Airtable: {e}")
@@ -66,10 +67,7 @@ def process_mipr_podcast_search(record_id):
                 f"Searching podcasts with keyword '{run_keyword}' for offset {offset}..."
             )
             search_results = external_api_service.search_podcasts(
-                query=run_keyword,
-                genre_ids=genre_ids,
-                offset=offset
-            )
+                query=run_keyword, genre_ids=genre_ids, offset=offset)
             logger.info("Podcast search results retrieved.")
             #print(search_results)
         except Exception as e:
@@ -79,29 +77,125 @@ def process_mipr_podcast_search(record_id):
 
         # Process and update Airtable records
         for result in search_results.get('results', []):
-            try:
-                data_processor.process_podcast_result(result, record_id, campaign_name, airtable_service)
-                logger.info("Processed podcast result and updated Airtable.")
-            except Exception as e:
-                logger.error(f"Error processing podcast result: {e}")
-                # Decide if you want to continue or re-raise here.
-                # raise
+            if result.get('email'):
+                try:
+                    data_processor.process_podcast_result_with_listennotes(
+                        result, record_id, campaign_name, airtable_service)
+                    logger.info(
+                        "Processed podcast result and updated Airtable.")
+                except Exception as e:
+                    logger.error(f"Error processing podcast result: {e}")
+                    # Decide if you want to continue or re-raise here.
+                    # raise
 
-       # Update the campaign record in Airtable
+    # Update the campaign record in Airtable
     try:
         new_page = int(page) + int(repeat_number)
-        airtable_service.update_record('Campaigns', record_id, {'Page': new_page})
+        airtable_service.update_record('Campaigns', record_id,
+                                       {'Page': new_page})
         logger.info(f"Updated campaign record with new page value: {new_page}")
     except Exception as e:
         logger.error(f"Error updating campaign record in Airtable: {e}")
         raise
 
 
-if __name__ == "__main__":
-    logger.info("Process started")
-    test_record_id = "recz7C3FJe915NMfi"
+def process_mipr_podcast_search_with_podscan(record_id):
+    # Initialize services
+    airtable_service = PodcastService()
+    openai_service = OpenAIService()
+    podscan_service = PodscanFM()
+    data_processor = DataProcessor()
+
     try:
-        process_mipr_podcast_search(test_record_id)
-        logger.info("Process ended successfully.")
+        # Fetch the campaign record from Airtable
+        logger.info(f"Fetching record {record_id} from Airtable...")
+        campaign_record = airtable_service.get_record('Campaigns',
+                                                      record_id)['fields']
+        logger.info("Record successfully retrieved.")
     except Exception as e:
-        logger.error(f"Process ended with an error: {e}")
+        logger.error(f"Error retrieving record from Airtable: {e}")
+        raise
+    try:
+        # Extract necessary fields
+        run_keyword = campaign_record.get('Run Keyword')
+        repeat_number = campaign_record.get('Repeat Number', 1)
+        page = campaign_record.get('Page', 1)
+        campaign_name = campaign_record.get('CampaignName')
+
+        logger.info("Extracted the main fields from the record.")
+
+        # Ensure necessary fields are available
+        if not run_keyword:
+            error_msg = f"Campaign {record_id} is missing 'Run Keyword'."
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+    except ValueError as ve:
+        logger.error(f"ValueError encountered: {ve}")
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error during field extraction: {e}")
+        raise
+
+    try:
+        # Use OpenAI to generate genre IDs
+        logger.info("Calling OpenAI to generate genre IDs...")
+        category_ids = openai_service.generate_genre_ids(run_keyword)
+        logger.info(f"Category IDs generated: {category_ids}")
+    except Exception as e:
+        logger.error(f"Error generating genre IDs: {e}")
+        raise
+
+    # Loop over the number of repeats
+    for i in range(int(repeat_number)):
+        try:
+            podcasts = podscan_service.search_podcasts(
+                run_keyword, category_id=category_ids, page=page)
+            if not podcasts:
+                print(f"No podcasts found on page {page}.")
+                break
+            logger.info("Podcast search results retrieved.")
+        except Exception as e:
+            logger.error(f"Error searching podcasts: {e}")
+            raise
+
+        for podcast in podcasts:
+            if podcast.get("email"):
+                try:
+                    dt_published = parse_date(podcast.get("last_posted_at"))
+
+                    if dt_published is None:
+                        logger.warning(
+                            f"Could not parse published date for podcast '{podcast.get('podcast_name')}'."
+                        )
+                        continue
+
+                    # Check if the episode was released within the past year
+                    time_frame = datetime.now(
+                        dt_published.tzinfo) - timedelta(days=90)
+                    if dt_published < time_frame:
+                        logger.info(
+                            f"Episode '{podcast.get('podcast_name')}' is older than 3 months. Skipping update."
+                        )
+                        continue
+
+                    
+                    podcast["last_posted_at"] = dt_published.strftime('%Y-%m-%d')
+                    
+                    data_processor.process_podcast_result_with_podscan(
+                        podcast, record_id, campaign_name, airtable_service)
+                    logger.info(
+                        "Processed podcast result and updated Airtable.")
+                except Exception as e:
+                    logger.error(f"Error processing podcast result: {e}")
+
+        page += 1
+
+    # Update the campaign record in Airtable
+    try:
+        new_page = int(page)
+        airtable_service.update_record('Campaigns', record_id,
+                                       {'Page': new_page})
+        logger.info(f"Updated campaign record with new page value: {new_page}")
+    except Exception as e:
+        logger.error(f"Error updating campaign record in Airtable: {e}")
+        raise

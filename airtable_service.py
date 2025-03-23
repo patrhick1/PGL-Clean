@@ -18,9 +18,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 logging.basicConfig(
-    level=logging.INFO, 
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # Retrieve your Airtable credentials from environment variables
@@ -29,11 +28,13 @@ MIPR_CRM_BASE_ID = os.getenv('MIPR_CRM_BASE_ID')
 PODCAST_BASE_ID = os.getenv('PODCAST_BASE_ID')
 CLIENT_TABLE_NAME = "Clients"
 
+
 class MIPRService:
     """
     This class handles operations with a specific Airtable base (MIPR CRM).
     It can retrieve, filter, and update records in a specified 'Clients' table.
     """
+
     def __init__(self):
         """
         Initialize the MIPRService by connecting to Airtable using credentials 
@@ -63,7 +64,8 @@ class MIPRService:
         """
         try:
             records = self.client_table.all(formula=formula)
-            logger.debug(f"Retrieved {len(records)} records using formula '{formula}'.")
+            logger.debug(
+                f"Retrieved {len(records)} records using formula '{formula}'.")
             return records
         except Exception as e:
             logger.error(f"Error getting records with filter '{formula}': {e}")
@@ -105,12 +107,14 @@ class MIPRService:
             logger.error(f"Error updating record {record_id}: {e}")
             return None
 
+
 class PodcastService:
     """
     This class handles operations for a separate Airtable base, which focuses on 
     podcast-related tables like 'Clients', 'Campaigns', and 'Podcasts'. 
     It provides utility methods to read, update, and create records in any table.
     """
+
     def __init__(self):
         """
         Initialize the PodcastService by connecting to Airtable using 
@@ -124,12 +128,18 @@ class PodcastService:
 
             # Store references to tables in a dictionary for easy access
             self.tables = {
-                'Clients': self.api.table(self.base_id, 'Clients'),
-                'Campaigns': self.api.table(self.base_id, 'Campaigns'),
-                'Podcasts': self.api.table(self.base_id, 'Podcasts'),
-                'Podcast_Episodes': self.api.table(self.base_id, 'Podcast_Episodes'),
-                'Campaign Manager': self.api.table(self.base_id, 'Campaign Manager'),
-                'Campaigns test': self.api.table(self.base_id, 'Campaigns test'),
+                'Clients':
+                self.api.table(self.base_id, 'Clients'),
+                'Campaigns':
+                self.api.table(self.base_id, 'Campaigns'),
+                'Podcasts':
+                self.api.table(self.base_id, 'Podcasts'),
+                'Podcast_Episodes':
+                self.api.table(self.base_id, 'Podcast_Episodes'),
+                'Campaign Manager':
+                self.api.table(self.base_id, 'Campaign Manager'),
+                'Campaigns test':
+                self.api.table(self.base_id, 'Campaigns test'),
             }
             logger.info("PodcastService initialized successfully.")
 
@@ -153,7 +163,8 @@ class PodcastService:
         table = self.tables.get(table_name)
         if not table:
             logger.error(f"Table '{table_name}' does not exist.")
-            raise ValueError(f"Table '{table_name}' does not exist in the base.")
+            raise ValueError(
+                f"Table '{table_name}' does not exist in the base.")
         return table
 
     def get_record(self, table_name, record_id):
@@ -172,7 +183,9 @@ class PodcastService:
             record = table.get(record_id)
             return record
         except Exception as e:
-            logger.error(f"Error retrieving record {record_id} from table '{table_name}': {e}")
+            logger.error(
+                f"Error retrieving record {record_id} from table '{table_name}': {e}"
+            )
             return None
 
     def update_record(self, table_name, record_id, fields):
@@ -190,10 +203,13 @@ class PodcastService:
         try:
             table = self.get_table(table_name)
             updated_record = table.update(record_id, fields)
-            logger.debug(f"Updated record {record_id} in table '{table_name}' with {fields}")
+            logger.debug(
+                f"Updated record {record_id} in table '{table_name}' with {fields}"
+            )
             return updated_record
         except Exception as e:
-            logger.error(f"Error updating record {record_id} in '{table_name}': {e}")
+            logger.error(
+                f"Error updating record {record_id} in '{table_name}': {e}")
             return None
 
     def create_record(self, table_name, fields):
@@ -210,13 +226,14 @@ class PodcastService:
         try:
             table = self.get_table(table_name)
             new_record = table.create(fields)
-            logger.debug(f"Created new record in table '{table_name}' with {fields}")
+            logger.debug(
+                f"Created new record in table '{table_name}' with {fields}")
             return new_record
         except Exception as e:
             logger.error(f"Error creating record in '{table_name}': {e}")
             return None
 
-    def search_records(self, table_name, formula, view=None):
+    def search_records(self, table_name, formula=None, view=None):
         """
         Search for records in a specified table using an Airtable filter formula.
 
@@ -230,14 +247,20 @@ class PodcastService:
         """
         try:
             table = self.get_table(table_name)
-            params = {'formula': formula}
+            params = {}
+            if formula:
+                params['formula'] = formula
             if view:
                 params['view'] = view
             records = table.all(**params)
-            logger.debug(f"Found {len(records)} records in table '{table_name}' with formula '{formula}'")
+            logger.debug(
+                f"Found {len(records)} records in table '{table_name}' with formula '{formula}'"
+            )
             return records
         except Exception as e:
-            logger.error(f"Error searching records in '{table_name}' with formula '{formula}': {e}")
+            logger.error(
+                f"Error searching records in '{table_name}' with formula '{formula}': {e}"
+            )
             return []
 
     def get_records_from_view(self, table_name, view):
@@ -254,9 +277,12 @@ class PodcastService:
         try:
             table = self.get_table(table_name)
             records = table.all(view=view)
-            logger.debug(f"Retrieved {len(records)} records from view '{view}' in table '{table_name}'")
+            logger.debug(
+                f"Retrieved {len(records)} records from view '{view}' in table '{table_name}'"
+            )
             return records
         except Exception as e:
-            logger.error(f"Error retrieving records from view '{view}' in '{table_name}': {e}")
+            logger.error(
+                f"Error retrieving records from view '{view}' in '{table_name}': {e}"
+            )
             return []
-

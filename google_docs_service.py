@@ -155,17 +155,3 @@ class GoogleDocsService:
         if files:
             return True, files[0]['id']  # Return True and the first file's ID if found
         return False, None
-
-
-if __name__ == "__main__":
-    google_service = GoogleDocsService()
-    document_id = "1qI7MeCuWZN1d9Jf76AAgLiUb1ODXI1GakCPSClXxz0k"
-    title = "Hvac Uncenso"
-    search_file = google_service.check_file_exists_in_folder(title)
-    print(search_file)
-    if search_file[0] == True:
-        print('file is found')
-        print(search_file[1])
-    else:
-        print('Not found')
-        print(search_file)

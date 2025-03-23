@@ -1,181 +1,246 @@
-# app/pitch_writer.py
+"""
+Pitch Writer Script
+
+This module completes the final step of creating pitch emails. It fetches data 
+from Airtable (e.g., client details, podcast/episode info, angles) and uses an 
+LLM (Anthropic Claude) to generate a tailored pitch and subject line. Finally, 
+it updates the "Campaign Manager" table with the newly created pitch.
+
+Author: Paschal Okonkwor
+Date: 2025-01-06
+"""
 
 import logging
+from typing import Optional
+import threading
 from airtable_service import PodcastService
 from anthropic_service import AnthropicService
-from google_docs_service import GoogleDocsService
 from data_processor import generate_prompt
 
-def pitch_writer():
+# Configure logging
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s [%(levelname)s] %(message)s')
+logger = logging.getLogger(__name__)
+
+
+def pitch_writer(stop_flag: Optional[threading.Event] = None):
     """
-    Main function that handles creating and updating pitch information in Airtable.
-    This includes collecting data from the "Campaign Manager" records and then
-    using Anthropic's Claude to generate pitches and subject lines.
+    The main function that handles the creation and update of pitch information 
+    in Airtable. It looks in a specific 'View' of the "Campaign Manager" table 
+    for records that are at the step of finalizing a pitch. Then, it:
+      1. Gathers all relevant data (client bio, summary, selected episode, etc.).
+      2. Prompts Claude to write a pitch, along with a subject line.
+      3. Updates the "Campaign Manager" record with the pitch and subject.
+
+    Args:
+        stop_flag: Optional threading.Event that signals when to stop processing
     """
-    logging.info('Starting the Pitch Writer Automation')
+    logger.info('Starting the Pitch Writer Automation')
 
-    # Initialize service clients to interact with different APIs
-    airtable_client = PodcastService()
-    claude_client = AnthropicService()
+    try:
+        # Check if we should stop before starting
+        if stop_flag and stop_flag.is_set():
+            logger.info("Stop flag set before starting pitch_writer")
+            return
 
-    # Define the names of tables in Airtable
-    CAMPAIGN_MANAGER_TABLE_NAME = 'Campaign Manager'  # Adjust the name if needed
-    CAMPAIGNS_TABLE_NAME = 'Campaigns'
-    PODCASTS_TABLE_NAME = 'Podcasts'
-    PODCAST_EPISODES_TABLE_NAME = 'Podcast_Episodes'
+        # Initialize services to interact with Airtable and Claude
+        airtable_client = PodcastService()
+        claude_client = AnthropicService()
 
-    # Define view name in the "Campaign Manager" table
-    EPISODE_AND_ANGLES = 'Episode and angles'
+        # Define table names and view
+        CAMPAIGN_MANAGER_TABLE_NAME = 'Campaign Manager'
+        CAMPAIGNS_TABLE_NAME = 'Campaigns'
+        PODCASTS_TABLE_NAME = 'Podcasts'
+        PODCAST_EPISODES_TABLE_NAME = 'Podcast_Episodes'
+        EPISODE_AND_ANGLES_VIEW = 'Episode and angles'
 
-    # Step 1: Fetch all records from the 'Episode and angles' view of the Campaign Manager table
-    campaign_manager_records = airtable_client.get_records_from_view(
-        CAMPAIGN_MANAGER_TABLE_NAME, 
-        EPISODE_AND_ANGLES
-    )
+        # Fetch all records from the specified view of the "Campaign Manager" table
+        campaign_manager_records = airtable_client.get_records_from_view(
+            CAMPAIGN_MANAGER_TABLE_NAME, EPISODE_AND_ANGLES_VIEW)
+        logger.info(
+            f"Fetched {len(campaign_manager_records)} record(s) for pitch writing."
+        )
 
-    # Loop through each record in the Campaign Manager table
-    for cm_record in campaign_manager_records:
-        try:
-            # Get the record ID for reference
+        # Loop over each record
+        for cm_record in campaign_manager_records:
+            # Check stop flag before processing each record
+            if stop_flag and stop_flag.is_set():
+                logger.info("Stop flag set - stopping pitch_writer processing")
+                return
+
             cm_record_id = cm_record['id']
-            # Get the fields section from the current record (this is where the data lives)
             cm_fields = cm_record.get('fields', {})
 
-            # Retrieve related Campaign record IDs from 'Campaigns' field
-            campaign_ids = cm_fields.get('Campaigns', [])
-            # Retrieve pitch topics from the current record
-            pitch_topics = cm_fields.get('Pitch Topics','')
+            try:
+                # Check stop flag before fetching associated records
+                if stop_flag and stop_flag.is_set():
+                    logger.info("Stop flag set - stopping before fetching associated records")
+                    return
 
-            # If there is no campaign linked, skip this record
-            if not campaign_ids:
-                logging.warning(f"No campaign linked to Campaign Manager record {cm_record_id}")
+                # Retrieve the campaign ID
+                campaign_ids = cm_fields.get('Campaigns', [])
+                if not campaign_ids:
+                    logger.warning(
+                        f"No campaign linked to Campaign Manager record {cm_record_id}"
+                    )
+                    continue
+                campaign_id = campaign_ids[0]
+
+                # Get the actual campaign record
+                campaign_record = airtable_client.get_record(
+                    CAMPAIGNS_TABLE_NAME, campaign_id)
+                campaign_fields = campaign_record.get('fields', {})
+
+                # Pull the relevant data from the campaign record
+                bio = campaign_fields.get('TextBio', '')
+                bio_summary = campaign_fields.get('SummaryBio', '')
+                client_names = campaign_fields.get('Name (from Client)', [])
+                client_name = client_names[
+                    0] if client_names else 'No Client Name'
+
+                # Retrieve the podcast ID
+                podcast_ids = cm_fields.get('Podcast Name', [])
+                if not podcast_ids:
+                    logger.warning(
+                        f"No podcast linked to Campaign Manager record {cm_record_id}"
+                    )
+                    continue
+                podcast_id = podcast_ids[0]
+
+                # Get the podcast record
+                podcast_record = airtable_client.get_record(
+                    PODCASTS_TABLE_NAME, podcast_id)
+                podcast_fields = podcast_record.get('fields', {})
+                podcast_name = podcast_fields.get('Podcast Name', '')
+                host_name = podcast_fields.get('Host Name', '')
+
+                # Retrieve the selected podcast episode
+                podcast_episode_id = cm_fields.get('Pitch Episode', '')
+                if not podcast_episode_id:
+                    logger.warning(
+                        f"No podcast episode linked to Campaign Manager record {cm_record_id}"
+                    )
+                    continue
+
+                # Get details about the chosen episode
+                podcast_episode_record = airtable_client.get_record(
+                    PODCAST_EPISODES_TABLE_NAME, podcast_episode_id)
+                podcast_episode_field = podcast_episode_record.get(
+                    'fields', {})
+                guest_name = podcast_episode_field.get('Guest', '')
+                episode_title = podcast_episode_field.get('Episode Title', '')
+                episode_summary = podcast_episode_field.get('Summary', '')
+                episode_ai_summary = podcast_episode_field.get(
+                    'AI Summary', '')
+
+                # Retrieve the pitch topics from the Campaign Manager record
+                pitch_topics = cm_fields.get('Pitch Topics', '')
+
+                # Check stop flag before Claude analysis
+                if stop_flag and stop_flag.is_set():
+                    logger.info("Stop flag set - stopping before Claude analysis")
+                    return
+
+                # If there's a guest, we craft the prompt accordingly
+                if guest_name:
+                    prompt_path = "prompts/pitch_writer_prompt/prompt_pitch_writer.txt"
+                    prompt_data = {
+                        'Podcast Name': podcast_name,
+                        'Host Name': host_name,
+                        'Guest': guest_name,
+                        'Episode Title': episode_title,
+                        'Summary': episode_summary,
+                        'AI Summary': episode_ai_summary,
+                        'SummaryBio': bio_summary,
+                        'Pitch Topics': pitch_topics,
+                        'Name (from Client)': client_name,
+                        'TextBio': bio,
+                    }
+                    pitch_prompt = generate_prompt(prompt_data, prompt_path)
+
+                    # Check stop flag before sending to Claude
+                    if stop_flag and stop_flag.is_set():
+                        logger.info("Stop flag set - stopping before sending to Claude")
+                        return
+
+                    # Send prompt to Claude
+                    write_pitch = claude_client.create_message(
+                        pitch_prompt, model='claude-3-5-sonnet-20241022', workflow='pitch_writer', podcast_id=podcast_id)
+
+                    # Check stop flag before updating Airtable
+                    if stop_flag and stop_flag.is_set():
+                        logger.info("Stop flag set - stopping before Airtable update")
+                        return
+
+                    # Build a subject line
+                    subject = f"Great episode with {guest_name}"
+
+                    # Update Airtable
+                    update_fields = {
+                        'Status': 'Pitch Done',
+                        'Pitch Email': write_pitch,
+                        'Subject Line': subject
+                    }
+                    airtable_client.update_record(CAMPAIGN_MANAGER_TABLE_NAME,
+                                                  cm_record_id, update_fields)
+
+                else:
+                    # Check stop flag before no-guest processing
+                    if stop_flag and stop_flag.is_set():
+                        logger.info("Stop flag set - stopping before no-guest processing")
+                        return
+
+                    # If there's no guest, we use a slightly different prompt
+                    prompt_path = "prompts/pitch_writer_prompt/prompt_pitch_writer.txt"
+                    prompt_data = {
+                        'Podcast Name': podcast_name,
+                        'Host Name': host_name,
+                        'Episode Title': episode_title,
+                        'Summary': episode_summary,
+                        'AI Summary': episode_ai_summary,
+                        'SummaryBio': bio_summary,
+                        'Pitch Topics': pitch_topics,
+                        'Name (from Client)': client_name,
+                        'TextBio': bio,
+                    }
+                    pitch_prompt = generate_prompt(prompt_data, prompt_path)
+                    write_pitch = claude_client.create_message(
+                        pitch_prompt, model='claude-3-5-sonnet-20241022', workflow='pitch_writer', podcast_id=podcast_id)
+
+                    # Get a subject line from Claude
+                    subject_prompt_path = "prompts/pitch_writer_prompt/prompt_write_subject_line.txt"
+                    subject_prompt_data = {
+                        'Summary': episode_summary,
+                        'AI Summary': episode_ai_summary,
+                    }
+                    subject_prompt = generate_prompt(subject_prompt_data,
+                                                     subject_prompt_path)
+                    subject = claude_client.create_message(subject_prompt, workflow='pitch_writer', podcast_id=podcast_id)
+
+                    # Check stop flag before final update
+                    if stop_flag and stop_flag.is_set():
+                        logger.info("Stop flag set - stopping before final update")
+                        return
+
+                    # Update the record
+                    update_fields = {
+                        'Status': 'Pitch Done',
+                        'Pitch Email': write_pitch,
+                        'Subject Line': subject
+                    }
+                    airtable_client.update_record(CAMPAIGN_MANAGER_TABLE_NAME,
+                                                  cm_record_id, update_fields)
+
+                logger.info(
+                    f"Campaign Manager record {cm_record_id} updated with new pitch."
+                )
+
+            except Exception as e:
+                logger.error(
+                    f"Error processing Campaign Manager record {cm_record_id}: {str(e)}"
+                )
                 continue
 
-            # Since there's usually only one campaign, just take the first one
-            campaign_id = campaign_ids[0]
-            # Fetch the actual campaign record from Airtable
-            campaign_record = airtable_client.get_record(CAMPAIGNS_TABLE_NAME, campaign_id)
-            # Extract the fields from the campaign record
-            campaign_fields = campaign_record.get('fields', {})
-
-            # Get relevant info from the campaign record
-            bio = campaign_fields.get('TextBio', '')
-            bio_summary = campaign_fields.get('SummaryBio', '')
-            client_names = campaign_fields.get('Name (from Client)', [])
-            client_name = client_names[0] if client_names else 'No Client Name'
-
-            # Get Podcast record IDs from 'Podcast Name' field in the Campaign Manager record
-            podcast_ids = cm_fields.get('Podcast Name', [])
-            # If there is no podcast linked, skip this record
-            if not podcast_ids:
-                logging.warning(f"No podcast linked to Campaign Manager record {cm_record_id}")
-                continue
-
-            # Usually only one podcast, so we take the first
-            podcast_id = podcast_ids[0]
-            # Fetch the podcast record from Airtable
-            podcast_record = airtable_client.get_record(PODCASTS_TABLE_NAME, podcast_id)
-            # Extract fields from the podcast record
-            podcast_fields = podcast_record.get('fields', {})
-            podcast_name = podcast_fields.get('Podcast Name', '')
-            host_name = podcast_fields.get('Host Name', '')
-
-            # Get the Podcast Episode ID from 'Pitch Episode' field in the Campaign Manager record
-            podcast_episode_id = cm_fields.get('Pitch Episode', '')
-            # If there is no podcast episode linked, skip
-            if not podcast_episode_id:
-                logging.warning(f"No podcast episode linked to Campaign Manager record {cm_record_id}")
-                continue
-
-            # Fetch the podcast episode record from Airtable
-            podcast_episode_record = airtable_client.get_record(PODCAST_EPISODES_TABLE_NAME, podcast_episode_id)
-            # Extract fields from the podcast episode record
-            podcast_episode_field = podcast_episode_record.get('fields', {})
-            guest_name = podcast_episode_field.get('Guest', '')
-            episode_title = podcast_episode_field.get('Episode Title', '')
-            episode_summary = podcast_episode_field.get('Summary', '')
-            episode_ai_summary = podcast_episode_field.get('AI Summary', '')
-
-            # If there's a guest, we'll use a different prompt than if there's no guest
-            if guest_name:
-                # Prepare the prompt to send to Claude to generate the pitch (for episodes with a guest)
-                prompt_path = r"app\prompts\pitch_writer_prompt\prompt_pitch_writer.txt"
-                
-                # We call a function to generate the prompt text by filling it with our dynamic data
-                prompt = generate_prompt({
-                    'Podcast Name': podcast_name,
-                    'Host Name': host_name,
-                    'Guest': guest_name,
-                    'Episode Title': episode_title,
-                    'Summary': episode_summary,
-                    'AI Summary': episode_ai_summary,
-                    'SummaryBio': bio_summary,
-                    'Pitch Topics': pitch_topics,
-                    'Name (from Client)': client_name,
-                    'TextBio': bio,
-                }, prompt_path)
-                
-                # Send the prompt to Claude to create the pitch
-                write_pitch = claude_client.create_message(prompt)
-
-                # Build a subject line for our pitch
-                subject = f"Great episode with {guest_name}"
-
-                # Prepare fields to update in the Campaign Manager table
-                update_fields = {
-                    'Status': 'Pitch Done',
-                    'Pitch Email': write_pitch,
-                    'Subject Line': subject
-                }
-
-                # Finally, update the Campaign Manager record with the new pitch and subject
-                airtable_client.update_record(CAMPAIGN_MANAGER_TABLE_NAME, cm_record_id, update_fields)
-
-            else:
-                # If there is no guest, we use a different prompt
-                prompt_path = r"app\prompts\pitch_writer_prompt\prompt_pitch_writer.txt"
-                
-                # Generate the pitch prompt for episodes without a guest
-                prompt = generate_prompt({
-                    'Podcast Name': podcast_name,
-                    'Host Name': host_name,
-                    'Episode Title': episode_title,
-                    'Summary': episode_summary,
-                    'AI Summary': episode_ai_summary,
-                    'SummaryBio': bio_summary,
-                    'Pitch Topics': pitch_topics,
-                    'Name (from Client)': client_name,
-                    'TextBio': bio,
-                }, prompt_path)
-                
-                # Send this prompt to Claude to create the pitch
-                write_pitch = claude_client.create_message(prompt)
-
-                # Use another prompt to get a suggested subject line from Claude
-                subject_prompt_path = r"app\prompts\pitch_writer_prompt\prompt_write_subject_line.txt"
-                subject_prompt = generate_prompt({
-                    'Summary': episode_summary,
-                    'AI Summary': episode_ai_summary,
-                }, subject_prompt_path)
-                
-                subject = claude_client.create_message(subject_prompt)
-
-                # Prepare fields to update in the Campaign Manager table
-                update_fields = {
-                    'Status': 'Pitch Done',
-                    'Pitch Email': write_pitch,
-                    'Subject Line': subject
-                }
-
-                # Update the record in the Campaign Manager table
-                airtable_client.update_record(CAMPAIGN_MANAGER_TABLE_NAME, cm_record_id, update_fields)
-                print(f"Record ID: {cm_record_id} has been updated")
-
-        except Exception as e:
-            # Log an error if something goes wrong while processing this record
-            logging.error(f"Error processing Campaign Manager record {cm_record_id}: {str(e)}")
-            continue
-
-if __name__ == "__main__":
-    pitch_writer()
-
+    except Exception as e:
+        logger.error(f"Error in pitch_writer function: {str(e)}")
+        raise

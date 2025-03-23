@@ -39,7 +39,7 @@ def generate_angles_and_bio_v1(record_id, airtable_service):
         # Instantiate helper services
         google_docs_service = GoogleDocsService()
         openai_service = OpenAIService()
-        anthropic_service = AnthropicService()
+        claude_client = AnthropicService()
 
         # Retrieve the record from Airtable
         record = airtable_service.get_record_by_id(record_id)
@@ -93,7 +93,7 @@ def generate_angles_and_bio_v1(record_id, airtable_service):
         """
 
         # Call Anthropic to generate the text
-        anthropic_response = anthropic_service.create_message(prompt)
+        anthropic_response = claude_client.create_message(prompt)
 
         # Use OpenAI GPT to structure the text
         parsing_prompt = "Parse out each of 3 bios and client angles, each angle has 3 parts: Topic, Outcome, Description"
@@ -149,7 +149,7 @@ def generate_angles_and_bio_v2(record_id, airtable_service):
         # Instantiate helper services
         google_docs_service = GoogleDocsService()
         openai_service = OpenAIService()
-        anthropic_service = AnthropicService()
+        claude_client = AnthropicService()
 
         # Retrieve the record from Airtable
         record = airtable_service.get_record_by_id(record_id)
@@ -201,7 +201,7 @@ def generate_angles_and_bio_v2(record_id, airtable_service):
         """
 
         # Generate text with Anthropic
-        anthropic_response = anthropic_service.create_message(prompt)
+        anthropic_response = claude_client.create_message(prompt)
 
         # Structure the text with OpenAI
         parsing_prompt = "Parse out each of 3 bios and client angles, each angle has 3 parts: Topic, Outcome, Description"

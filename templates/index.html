@@ -3,30 +3,214 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Automation Dashboard</title>
+    <title>PGL Automation Dashboard</title>
     <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="/static/dashboard.js"></script>
 </head>
 <body>
     <div class="container">
-        <h1>Automation Dashboard</h1>
-        <div class="button-grid">
-            <button onclick="triggerAutomation('generate_bio_angles')">Bio and Angles Generation</button>
-            <button onclick="triggerAutomation('mipr_podcast_search')">MIPR Podcast Search - API</button>
-            <button onclick="triggerAutomation('summary_host_guest')">Summary, Host and Guest Identification</button>
-            <button onclick="triggerAutomation('determine_fit')">Determine Fit</button>
-            <button onclick="triggerAutomation('pitch_episode_angle')">Pitch Episode and Angle Selection</button>
-            <button onclick="triggerAutomation('pitch_writer')">Pitch Writer</button>
-            <button onclick="triggerAutomation('send_pitch')">Send Pitch to Instantly</button>
-        </div>
+        <h1><i class="fas fa-robot"></i> PGL Automation Dashboard</h1>
+        
+        <!-- Status Message Display -->
+        <div id="status-message"></div>
+        
+        <!-- Automation Workflows Section -->
+        <section>
+            <div class="section-title">
+                <i class="fas fa-cogs"></i>
+                Automation Workflows
+            </div>
+            
+            <div class="button-row">
+                <button class="automation-button" onclick="triggerAutomation('generate_bio_angles')">
+                    <i class="fas fa-pen-fancy"></i>
+                    Bio and Angles Generation
+                </button>
+                <button class="automation-button" onclick="handleMIPRSearch()">
+                    <i class="fas fa-search"></i>
+                    MIPR Podcast Search - API
+                </button>
+            </div>
+            
+            <div class="button-row">
+                <button class="automation-button" onclick="triggerAutomation('fetch_podcast_episodes')">
+                    <i class="fas fa-podcast"></i>
+                    Fetch Podcast Episodes
+                </button>
+                <button class="automation-button" onclick="triggerAutomation('summary_host_guest')">
+                    <i class="fas fa-users"></i>
+                    Summary, Host and Guest Identification
+                </button>
+            </div>
+            
+            <div class="button-row">
+                <button class="automation-button" onclick="triggerAutomation('determine_fit')">
+                    <i class="fas fa-check-circle"></i>
+                    Determine Fit
+                </button>
+                <button class="automation-button" onclick="triggerAutomation('pitch_episode_angle')">
+                    <i class="fas fa-lightbulb"></i>
+                    Pitch Episode and Angle Selection
+                </button>
+            </div>
+            
+            <div class="button-row">
+                <button class="automation-button" onclick="triggerAutomation('pitch_writer')">
+                    <i class="fas fa-edit"></i>
+                    Pitch Writer
+                </button>
+                <button class="automation-button" onclick="triggerAutomation('send_pitch')">
+                    <i class="fas fa-paper-plane"></i>
+                    Send Pitch to Instantly
+                </button>
+            </div>
+            
+            <div class="button-row">
+                <button class="automation-button" onclick="triggerAutomation('transcribe_podcast')">
+                    <i class="fas fa-microphone-alt"></i>
+                    Transcribe All Pending Episodes
+                </button>
+            </div>
+        </section>
+        
+        <!-- AI Usage Reports Section -->
+        <section>
+            <div class="section-title">
+                <i class="fas fa-chart-line"></i>
+                AI Usage Reports
+            </div>
+            
+            <div class="ai-usage-form">
+                <div class="form-title">
+                    <i class="fas fa-file-alt"></i>
+                    Generate Usage Report
+                </div>
+                <div class="form-row">
+                    <div class="input-field">
+                        <label for="start-date"><i class="far fa-calendar"></i> Start Date</label>
+                        <input type="date" id="start-date">
+                    </div>
+                    <div class="input-field">
+                        <label for="end-date"><i class="far fa-calendar"></i> End Date</label>
+                        <input type="date" id="end-date">
+                    </div>
+                    <div class="input-field">
+                        <label for="group-by"><i class="fas fa-layer-group"></i> Group By</label>
+                        <select id="group-by">
+                            <option value="model">Model</option>
+                            <option value="workflow">Workflow</option>
+                            <option value="endpoint">Endpoint</option>
+                            <option value="podcast_id">Podcast ID</option>
+                        </select>
+                    </div>
+                    <div class="input-field">
+                        <label for="format"><i class="fas fa-file-export"></i> Format</label>
+                        <select id="format">
+                            <option value="json">JSON</option>
+                            <option value="text">Text</option>
+                            <option value="csv">CSV</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="button-field">
+                    <button class="btn-small" onclick="generateAIUsageReport()">
+                        <i class="fas fa-download"></i>
+                        Generate Report
+                    </button>
+                </div>
+            </div>
+            
+            <div class="ai-usage-form">
+                <div class="form-title">
+                    <i class="fas fa-calculator"></i>
+                    Get Podcast Cost Report
+                </div>
+                <div class="form-row">
+                    <div class="input-field">
+                        <label for="podcast-id"><i class="fas fa-hashtag"></i> Podcast ID</label>
+                        <input type="text" id="podcast-id" placeholder="Enter Airtable record ID">
+                        <div class="note">Enter the Airtable record ID of the podcast</div>
+                    </div>
+                </div>
+                <div class="button-field">
+                    <button class="btn-small" onclick="viewPodcastCost()">
+                        <i class="fas fa-eye"></i>
+                        View Cost
+                    </button>
+                    <button class="btn-small" onclick="viewPodcastCostDashboard()">
+                        <i class="fas fa-chart-bar"></i>
+                        View Dashboard
+                    </button>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Task Management Section -->
+        <section>
+            <div class="section-title">
+                <i class="fas fa-tasks"></i>
+                Task Management
+            </div>
+            
+            <div class="task-management">
+                <div class="task-form">
+                    <div class="form-title">
+                        <i class="fas fa-stop-circle"></i>
+                        Stop Task
+                    </div>
+                    <div class="form-row">
+                        <div class="input-field">
+                            <label for="stop-task-id"><i class="fas fa-id-badge"></i> Task ID</label>
+                            <input type="text" id="stop-task-id" placeholder="Enter task ID to stop">
+                        </div>
+                    </div>
+                    <div class="button-field">
+                        <button class="btn-small" onclick="stopTask()">
+                            <i class="fas fa-stop"></i>
+                            Stop Task
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="task-form">
+                    <div class="form-title">
+                        <i class="fas fa-info-circle"></i>
+                        Check Task Status
+                    </div>
+                    <div class="form-row">
+                        <div class="input-field">
+                            <label for="check-task-id"><i class="fas fa-id-badge"></i> Task ID</label>
+                            <input type="text" id="check-task-id" placeholder="Enter task ID to check">
+                        </div>
+                    </div>
+                    <div class="button-field">
+                        <button class="btn-small" onclick="checkTaskStatus()">
+                            <i class="fas fa-sync"></i>
+                            Check Status
+                        </button>
+                    </div>
+                    <div id="task-status-result"></div>
+                </div>
+                
+                <div class="task-list">
+                    <div class="form-title">
+                        <i class="fas fa-list"></i>
+                        Running Tasks
+                    </div>
+                    <button class="btn-small" onclick="listRunningTasks()">
+                        <i class="fas fa-sync-alt"></i>
+                        Refresh Task List
+                    </button>
+                    <div id="running-tasks"></div>
+                </div>
+            </div>
+        </section>
+        
+        <footer>
+            <p><i class="fas fa-code"></i> PGL Automation Dashboard &copy; 2024</p>
+        </footer>
     </div>
-
-    <script>
-        function triggerAutomation(action) {
-            fetch(`/trigger/${action}`, { method: 'POST' })
-                .then(response => response.json())
-                .then(data => alert(data.message))
-                .catch(error => alert("Error triggering automation: " + error));
-        }
-    </script>
 </body>
 </html>

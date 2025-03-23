@@ -6,11 +6,13 @@ Please carefully read through this podcast transcript in its entirety before beg
 
 Based solely on the information provided in the transcript above, please complete the following tasks:
 
+0. Identify who the Host is for the podcast, and if there are any guest, identify who they are as well
+
 1. Essay-style Summary
 Write a 500-word blog post style summary of the entire podcast episode. Focus on capturing the main topics, key points, and overall narrative flow of the conversation.    
 
 2. Intro
-Identify the section of the podcast where the host introduces the guest. Transcribe this section verbatim, including the guest's name, company, role, and any additional background or biographical details provided.
+Identify the section of the podcast where the host introduces the guest. Transcribe this section verbatim, including the Host's Name, guest's name, company, role, and any additional background or biographical details provided.
 
 3. Interview
 Create a comprehensive outline of all the important questions asked by the host and a summary of the corresponding answers provided by the guest throughout the podcast. Use the following format for each line:
