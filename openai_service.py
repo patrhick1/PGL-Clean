@@ -36,9 +36,6 @@ logger = logging.getLogger(__name__)
 category_id_prompt = read_txt_file(
     r"C:\Users\ebube\Documents\PGL transition\app\genre_id_prompt.txt")
 
-genre_id_prompt = read_txt_file(
-    r"prompts/podcast_search/listennotes_genre_id_prompt.txt")
-
 
 class get_host_guest_confirmation(BaseModel):
     status: str = Field(
@@ -244,6 +241,7 @@ class OpenAIService:
     def create_chat_completion(self, system_prompt, prompt, 
                               workflow="chat_completion", 
                               podcast_id: Optional[str] = None,
+                              parse_json=False, json_key=None,
                               max_retries=3, initial_retry_delay=2):
         """
         Create a chat completion using the OpenAI API. 
@@ -254,11 +252,14 @@ class OpenAIService:
             prompt (str): The user's main content/query.
             workflow (str): Name of the workflow using this method.
             podcast_id (str, optional): Airtable record ID for tracking purposes.
+            parse_json (bool, optional): Whether to parse the response as JSON.
+            json_key (str, optional): If parse_json is True, extract this key from the JSON.
             max_retries (int): Maximum number of retry attempts
             initial_retry_delay (int): Initial delay in seconds before first retry (doubles with each retry)
 
         Returns:
-            str: The raw text (JSON or otherwise) from the assistant's message.
+            str: The raw text (JSON or otherwise) from the assistant's message, or
+                 the value of the specified json_key if parse_json is True.
         """
         retry_count = 0
         retry_delay = initial_retry_delay
@@ -289,7 +290,7 @@ class OpenAIService:
                 execution_time = time.time() - start_time
                 
                 # Get the AI's response
-                ai_response = response.choices[0].message.content
+                assistant_message = response.choices[0].message.content
                 
                 # Log usage stats from the API response
                 tokens_in = response.usage.prompt_tokens
@@ -306,7 +307,29 @@ class OpenAIService:
                     podcast_id=podcast_id
                 )
                 
-                return ai_response
+                # Parse JSON if requested
+                if parse_json:
+                    try:
+                        # Clean the JSON string in case there are backticks
+                        if "```" in assistant_message:
+                            assistant_message = assistant_message.split("```")[1]
+                            if assistant_message.startswith("json"):
+                                assistant_message = assistant_message[4:]
+                        
+                        result = json.loads(assistant_message.strip())
+                        if json_key is not None:
+                            if json_key not in result:
+                                raise ValueError(f"Response JSON is missing '{json_key}' field.")
+                            return result[json_key]
+                        return result
+                    
+                    except json.JSONDecodeError as e:
+                        logger.error(f"Error parsing JSON from response: {e}")
+                        logger.error(f"Raw response: {assistant_message}")
+                        raise ValueError(
+                            f"OpenAI response was not valid JSON. Check logs.")
+                
+                return assistant_message
                 
             except Exception as e:
                 last_exception = e
@@ -324,98 +347,3 @@ class OpenAIService:
                     # We've exhausted all retries
                     logger.error(f"Error in create_chat_completion after {max_retries} retries: {e}")
                     raise Exception(f"Failed to generate chat completion using OpenAI API: {e}")
-
-    def generate_genre_ids(self, run_keyword, 
-                          workflow="generate_genre_ids", 
-                          podcast_id: Optional[str] = None):
-        """
-        Generate a list of genre IDs based on a user keyword. 
-        The final response is expected to be JSON containing an 'ids' field.
-
-        Example JSON Format:
-            {"ids": "139,144,157,99"}
-
-        Args:
-            run_keyword (str): The keyword or phrase to generate genre IDs from.
-            workflow (str): Name of the workflow using this method.
-            podcast_id (str, optional): Airtable record ID for tracking purposes.
-
-        Returns:
-            str: A comma-separated string of genre IDs.
-
-        Raises:
-            ValueError: If the assistant's reply is not valid JSON or doesn't have 'ids'.
-        """
-        prompt = f"""
-        User Search Query:
-        "{run_keyword}"
-
-        Provide the list of genre IDs as per the example above. 
-        Return the response in JSON format with an 'ids' key containing an array of integers.
-        Do not include backticks i.e ```json
-        Example JSON Output Format: {{"ids": "139,144,157,99,90,77,253,69,104,84"}}
-        """
-
-        try:
-            # Start timing
-            start_time = time.time()
-            
-            # Set the model name - constant for this method
-            model = "gpt-4o-2024-08-06"
-            
-            # Call the OpenAI API
-            response = self.client.chat.completions.create(
-                model=model,
-                messages=[{
-                    "role": "system",
-                    "content": genre_id_prompt
-                }, {
-                    "role": "user",
-                    "content": prompt
-                }],
-                temperature=0,
-            )
-            
-            # Calculate execution time
-            execution_time = time.time() - start_time
-            
-            # Extract the content
-            assistant_message = response.choices[0].message.content
-            
-            # Log usage stats from the API response
-            tokens_in = response.usage.prompt_tokens
-            tokens_out = response.usage.completion_tokens
-            
-            # Log the usage data with podcast_id
-            ai_tracker.log_usage(
-                workflow=workflow,
-                model=model,
-                tokens_in=tokens_in,
-                tokens_out=tokens_out,
-                execution_time=execution_time,
-                endpoint="openai.chat.completions.create",
-                podcast_id=podcast_id
-            )
-
-            # Parse & validate the returned JSON format
-            try:
-                # Clean the JSON string in case there are backticks
-                if "```" in assistant_message:
-                    assistant_message = assistant_message.split("```")[1]
-                    if assistant_message.startswith("json"):
-                        assistant_message = assistant_message[4:]
-                
-                result = json.loads(assistant_message.strip())
-                if "ids" not in result:
-                    raise ValueError("Response JSON is missing 'ids' field.")
-                return result["ids"]
-            
-            except json.JSONDecodeError as e:
-                logger.error(f"Error parsing JSON from genre_ids response: {e}")
-                logger.error(f"Raw response: {assistant_message}")
-                raise ValueError(
-                    "OpenAI genre_ids response was not valid JSON. Check logs.")
-
-        except Exception as e:
-            logger.error(f"Error in generate_genre_ids: {e}")
-            raise

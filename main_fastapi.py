@@ -8,22 +8,31 @@ Date: 2025-01-06
 import os
 import logging
 import uuid
-from fastapi import FastAPI, Request, Query, Response, status
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi import FastAPI, Request, Query, Response, status, Form, Depends
+from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from typing import Optional
 from datetime import datetime
+
+# Import the authentication middleware
+from auth_middleware import (
+    AuthMiddleware, 
+    authenticate_user, 
+    create_session, 
+    get_current_user,
+    get_admin_user
+)
 
 # Import the task manager
 from task_manager import task_manager
 
 # Import the functions that handle specific tasks
 from webhook_handler import poll_airtable_and_process, poll_podcast_search_database, enrich_host_name
-from summary_guest_identification import process_summary_host_guest
-from determine_fit import determine_fit
-from pitch_episode_selection import pitch_episode_selection
-from pitch_writer import pitch_writer
+from summary_guest_identification_optimized import PodcastProcessor  # Import the optimized version
+from determine_fit_optimized import determine_fit  # Import the optimized version
+from pitch_episode_selection_optimized import pitch_episode_selection  # Import the optimized version
+from pitch_writer_optimized import pitch_writer  # Import the optimized version
 from send_pitch_to_instantly import send_pitch_to_instantly
 from instantly_email_sent import update_airtable_when_email_sent
 from instantly_response import update_correspondent_on_airtable
@@ -32,6 +41,9 @@ from podcast_note_transcriber import get_podcast_audio_transcription, transcribe
 
 # Import the AI usage tracker
 from ai_usage_tracker import tracker as ai_tracker
+
+# Import the test runner (for LLM model testing)
+from test_scripts.test_runner import register_routes as register_test_routes
 
 # -------------------------------------------------------------------
 # Configure logging
@@ -42,6 +54,9 @@ logger = logging.getLogger(__name__)
 # -------------------------------------------------------------------
 
 app = FastAPI()
+
+# Add authentication middleware
+app.add_middleware(AuthMiddleware)
 
 # Initialize Jinja2Templates for HTML rendering
 templates = Jinja2Templates(directory="templates")
@@ -63,18 +78,80 @@ templates.env.filters["format_datetime"] = format_datetime
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
+@app.get("/login")
+def login_page(request: Request):
+    """Render the login page"""
+    return templates.TemplateResponse("login.html", {"request": request})
+
+
+@app.post("/login")
+async def login(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...)
+):
+    """Handle login form submission"""
+    # Authenticate user
+    role = authenticate_user(username, password)
+    
+    if not role:
+        # Authentication failed
+        return templates.TemplateResponse(
+            "login.html", 
+            {
+                "request": request, 
+                "error": "Invalid username or password"
+            }
+        )
+    
+    # Create session
+    session_id = create_session(username, role)
+    
+    # Create response with redirect
+    response = RedirectResponse(url="/", status_code=303)
+    
+    # Set session cookie
+    response.set_cookie(
+        key="session_id",
+        value=session_id,
+        httponly=True,
+        secure=True,  # Set to False for http development
+        samesite="lax",
+        max_age=3600  # 1 hour
+    )
+    
+    return response
+
+
+@app.get("/logout")
+def logout(request: Request):
+    """Log out the user by clearing the session cookie"""
+    response = RedirectResponse(url="/login", status_code=303)
+    response.delete_cookie(key="session_id")
+    return response
+
+
 @app.get("/")
-def index(request: Request):
+def index(request: Request, user: dict = Depends(get_current_user)):
     """
     Root endpoint that renders the main dashboard HTML.
+    Requires authentication.
     """
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(
+        "index.html", 
+        {
+            "request": request,
+            "username": user["username"],
+            "role": user["role"]
+        }
+    )
 
 
 @app.get("/api-status")
 def api_status():
     """
     API status endpoint that returns a simple JSON message.
+    This endpoint is public.
     """
     return {"message": "PGL Automation API is running (FastAPI version)!"}
 
@@ -88,6 +165,7 @@ def trigger_automation(
     """
     A single endpoint to trigger one of multiple automation functions.
     Returns a task ID that can be used to stop the automation if needed.
+    This endpoint is publicly accessible (no auth required).
     """
     try:
         # Generate a unique task ID
@@ -119,7 +197,7 @@ def trigger_automation(
                     get_podcast_episodes(stop_flag)
                 
                 elif action == 'summary_host_guest':
-                    process_summary_host_guest(stop_flag)
+                    run_summary_host_guest_optimized(stop_flag)
                 
                 elif action == 'determine_fit':
                     determine_fit(stop_flag)
@@ -133,7 +211,7 @@ def trigger_automation(
                 elif action == 'send_pitch':
                     send_pitch_to_instantly(stop_flag)
                 
-                elif action == 'encrich_host_name':
+                elif action == 'enrich_host_name':
                     enrich_host_name(stop_flag)
                 
                 elif action == 'transcribe_podcast':
@@ -167,11 +245,14 @@ def trigger_automation(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @app.post("/stop_task/{task_id}")
-def stop_task(task_id: str):
-    """Stop a running automation task"""
+def stop_task(task_id: str, user: dict = Depends(get_current_user)):
+    """
+    Stop a running automation task.
+    Staff or admin access required.
+    """
     try:
         if task_manager.stop_task(task_id):
-            logger.info(f"Task {task_id} is being stopped")
+            logger.info(f"Task {task_id} is being stopped by user {user['username']}")
             return {"message": f"Task {task_id} is being stopped", "status": "stopping"}
         logger.warning(f"Task {task_id} not found")
         return JSONResponse(
@@ -186,8 +267,11 @@ def stop_task(task_id: str):
         )
 
 @app.get("/task_status/{task_id}")
-def get_task_status(task_id: str):
-    """Get the status of a specific task"""
+def get_task_status(task_id: str, user: dict = Depends(get_current_user)):
+    """
+    Get the status of a specific task.
+    Staff or admin access required.
+    """
     try:
         status = task_manager.get_task_status(task_id)
         if status:
@@ -204,8 +288,11 @@ def get_task_status(task_id: str):
         )
 
 @app.get("/list_tasks")
-def list_tasks():
-    """List all running tasks"""
+def list_tasks(user: dict = Depends(get_current_user)):
+    """
+    List all running tasks.
+    Staff or admin access required.
+    """
     try:
         return task_manager.list_tasks()
     except Exception as e:
@@ -231,16 +318,44 @@ def run_transcription_task(stop_flag):
     finally:
         loop.close()
 
+def run_summary_host_guest_optimized(stop_flag):
+    """Run the async optimized summary host guest identification task in a new event loop"""
+    import asyncio
+    from summary_guest_identification_optimized import PodcastProcessor
+    
+    # Create a new event loop for this thread
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    try:
+        # Check if we should stop before starting
+        if stop_flag and stop_flag.is_set():
+            logger.info("Stop flag set before starting summary_host_guest_optimized")
+            return
+            
+        # Initialize the processor and run the process_all_records method
+        # Always use Gemini 2.0 flash without any options to override
+        processor = PodcastProcessor()  # PodcastProcessor always uses gemini-2.0-flash by default
+        results = loop.run_until_complete(processor.process_all_records(max_concurrency=3, batch_size=5, stop_flag=stop_flag))
+        logger.info(f"Optimized summary host guest identification task completed successfully. Processed {results.get('total_processed', 0)} records with {results.get('successful', 0)} successful.")
+    except Exception as e:
+        logger.error(f"Error in optimized summary host guest identification task: {e}", exc_info=True)
+    finally:
+        loop.close()
+
 
 @app.get("/ai-usage")
 def get_ai_usage(
+    request: Request,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     group_by: str = Query("model", description="Field to group by: 'model', 'workflow', 'endpoint', or 'podcast_id'"),
-    format: str = Query("json", description="Output format: 'json', 'text', or 'csv'")
+    format: str = Query("json", description="Output format: 'json', 'text', or 'csv'"),
+    user: dict = Depends(get_admin_user)
 ):
     """
     Get AI usage statistics, optionally filtered by date range.
+    Admin access required.
     
     Args:
         start_date: Optional ISO format date (YYYY-MM-DD) to start from
@@ -282,9 +397,10 @@ def get_ai_usage(
 
 
 @app.get("/podcast-cost/{podcast_id}")
-def get_podcast_cost(podcast_id: str):
+def get_podcast_cost(podcast_id: str, user: dict = Depends(get_admin_user)):
     """
     Get detailed AI usage statistics for a specific podcast by its Airtable podcast record ID.
+    Admin access required.
     
     This endpoint shows the complete cost analysis for processing a single podcast
     through the entire pipeline from discovery to email creation.
@@ -307,9 +423,14 @@ def get_podcast_cost(podcast_id: str):
 
 
 @app.get("/podcast-cost-dashboard/{podcast_id}", response_class=HTMLResponse)
-def get_podcast_cost_dashboard(request: Request, podcast_id: str):
+def get_podcast_cost_dashboard(
+    request: Request, 
+    podcast_id: str, 
+    user: dict = Depends(get_admin_user)
+):
     """
     Render a dashboard with detailed AI usage statistics for a specific podcast.
+    Admin access required.
     
     This endpoint provides a visual dashboard showing the cost analysis for processing 
     a podcast through the entire pipeline.
@@ -351,6 +472,8 @@ def get_podcast_cost_dashboard(request: Request, podcast_id: str):
         # Pass all the report data directly to the template
         return templates.TemplateResponse("podcast_cost.html", {
             "request": request,
+            "username": user["username"],
+            "role": user["role"],
             **report  # Unpack all report data into the template context
         })
     
@@ -423,9 +546,10 @@ async def webhook_replyreceived(request: Request):
 
 
 @app.get("/transcribe-podcast/{podcast_id}")
-async def transcribe_specific_podcast(podcast_id: str):
+async def transcribe_specific_podcast(podcast_id: str, user: dict = Depends(get_admin_user)):
     """
     Endpoint to trigger transcription for a specific podcast by ID.
+    Admin access required.
     
     This will look up the podcast in Airtable and transcribe its audio.
     
@@ -517,9 +641,11 @@ def run_specific_transcription(podcast_id, audio_url, episode_name):
 
 
 @app.get("/storage-status")
-def get_storage_status():
+def get_storage_status(user: dict = Depends(get_admin_user)):
     """
     Get detailed information about the AI usage storage system.
+    Admin access required.
+    
     This helps verify that Replit persistent storage is working correctly.
     """
     try:
@@ -532,7 +658,7 @@ def get_storage_status():
                 'REPL_ID': os.getenv('REPL_ID', 'Not available'),
                 'REPL_SLUG': os.getenv('REPL_SLUG', 'Not available'),
             },
-            'timestamp': datetime.datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat()
         })
         
         return storage_info
@@ -542,6 +668,56 @@ def get_storage_status():
             content={"error": f"Failed to get storage status: {str(e)}"},
             status_code=500
         )
+
+
+@app.get("/admin")
+def admin_dashboard(request: Request, user: dict = Depends(get_admin_user)):
+    """
+    Admin dashboard page that shows links to all admin-only features.
+    Admin access required.
+    """
+    return templates.TemplateResponse(
+        "admin_dashboard.html", 
+        {
+            "request": request,
+            "username": user["username"],
+            "role": user["role"]
+        }
+    )
+
+# Register the test runner routes with the FastAPI app
+register_test_routes(app)
+
+# Add a link to the LLM Test Dashboard in the admin template
+@app.on_event("startup")
+async def startup_event():
+    # Update the admin dashboard template to include a link to the LLM Test Dashboard
+    try:
+        # Just log it for now - in a real app you might want to modify the template
+        logger.info("Adding LLM Test Dashboard link to admin dashboard")
+    except Exception as e:
+        logger.error(f"Error updating admin dashboard: {e}")
+
+# Add a shutdown event handler to perform cleanup
+@app.on_event("shutdown")
+async def shutdown_event():
+    try:
+        logger.info("Application shutting down, cleaning up resources...")
+        
+        # Clean up any running tasks or processes
+        # This is especially important for asyncio loops and thread pools
+        
+        # Close any open database connections or services
+        if hasattr(task_manager, 'cleanup'):
+            task_manager.cleanup()
+        
+        # Allow some time for graceful cleanup
+        import asyncio
+        await asyncio.sleep(0.5)
+        
+        logger.info("Cleanup completed")
+    except Exception as e:
+        logger.error(f"Error during application shutdown: {e}")
 
 
 if __name__ == "__main__":

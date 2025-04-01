@@ -67,6 +67,24 @@ class TaskManager:
                 }
                 for task_id, info in self.tasks.items()
             }
+    
+    def cleanup(self) -> None:
+        """Stop all tasks during application shutdown"""
+        logger.info("Cleaning up all tasks")
+        with self._lock:
+            task_ids = list(self.tasks.keys())
+            for task_id in task_ids:
+                try:
+                    # Signal all tasks to stop
+                    self.tasks[task_id]['stop_flag'].set()
+                    self.tasks[task_id]['status'] = 'stopped'
+                    logger.info(f"Signaled task {task_id} to stop during shutdown")
+                except Exception as e:
+                    logger.error(f"Error stopping task {task_id} during shutdown: {e}")
+            
+            # Clear the tasks dictionary
+            self.tasks.clear()
+            logger.info(f"Cleaned up {len(task_ids)} tasks")
 
 # Global task manager instance
 task_manager = TaskManager() 

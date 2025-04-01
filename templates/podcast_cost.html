@@ -6,8 +6,79 @@
     <title>Podcast AI Usage Cost Report</title>
     <link rel="stylesheet" href="/static/dashboard.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .user-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #f8f9fa;
+            padding: 10px 20px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+        }
+        
+        .role-badge {
+            padding: 4px 10px;
+            border-radius: 15px;
+            margin-left: 10px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .role-badge.admin {
+            background-color: #4a6cf7;
+            color: white;
+        }
+        
+        .admin-link, .back-link {
+            margin-right: 15px;
+            background-color: #4a6cf7;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 4px;
+            text-decoration: none;
+            transition: background-color 0.3s;
+        }
+        
+        .admin-link:hover, .back-link:hover {
+            background-color: #3451b2;
+            text-decoration: none;
+        }
+        
+        .logout-link {
+            background-color: #dc3545;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 4px;
+            text-decoration: none;
+            transition: background-color 0.3s;
+        }
+        
+        .logout-link:hover {
+            background-color: #c82333;
+            text-decoration: none;
+        }
+    </style>
 </head>
 <body>
+    <div class="user-bar">
+        <div class="user-info">
+            <span>Logged in as: <strong>{{ username }}</strong></span>
+            <div class="role-badge {{ role }}">{{ role }}</div>
+        </div>
+        <div class="actions">
+            <a href="/admin" class="admin-link">Admin Dashboard</a>
+            <a href="/" class="back-link">Main Dashboard</a>
+            <a href="/logout" class="logout-link">Logout</a>
+        </div>
+    </div>
+
     <div class="container">
         <a href="/" class="back-button">Back to Dashboard</a>
         
@@ -19,7 +90,7 @@
         <div class="summary-cards">
             <div class="card">
                 <h2>Total Cost</h2>
-                <div class="value" id="total-cost">${{ total_cost|round(6) }}</div>
+                <div class="value" id="total-cost">${{ (total_cost or 0.0)|round(6) }}</div>
                 <div class="description">Estimated cost in USD</div>
             </div>
             
@@ -63,7 +134,7 @@
                         <td>{{ data.tokens_in|format_number }}</td>
                         <td>{{ data.tokens_out|format_number }}</td>
                         <td>{{ data.total_tokens|format_number }}</td>
-                        <td><span class="cost-pill">${{ data.cost|round(6) }}</span></td>
+                        <td><span class="cost-pill">${{ (data.cost or 0.0)|round(6) }}</span></td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -93,7 +164,7 @@
                         <td>{{ entry.tokens_in|format_number }}</td>
                         <td>{{ entry.tokens_out|format_number }}</td>
                         <td>{{ entry.total_tokens|format_number }}</td>
-                        <td><span class="cost-pill">${{ entry.cost|round(6) }}</span></td>
+                        <td><span class="cost-pill">${{ (entry.cost or 0.0)|round(6) }}</span></td>
                     </tr>
                     {% endfor %}
                 </tbody>

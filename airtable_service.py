@@ -137,9 +137,7 @@ class PodcastService:
                 'Podcast_Episodes':
                 self.api.table(self.base_id, 'Podcast_Episodes'),
                 'Campaign Manager':
-                self.api.table(self.base_id, 'Campaign Manager'),
-                'Campaigns test':
-                self.api.table(self.base_id, 'Campaigns test'),
+                self.api.table(self.base_id, 'Campaign Manager')
             }
             logger.info("PodcastService initialized successfully.")
 
@@ -261,6 +259,55 @@ class PodcastService:
             logger.error(
                 f"Error searching records in '{table_name}' with formula '{formula}': {e}"
             )
+            return []
+
+    def create_records_batch(self, table_name, records_data):
+        """
+        Create multiple records in a table with a single API call.
+
+        Args:
+            table_name (str): The name of the table to add records to.
+            records_data (list): A list of dictionaries, each containing fields for a new record.
+
+        Returns:
+            list: The created records or empty list on failure.
+        """
+        try:
+            if not records_data:
+                logger.warning(f"No records provided for batch creation in '{table_name}'")
+                return []
+
+            table = self.get_table(table_name)
+            created_records = table.batch_create(records_data)
+            logger.info(f"Successfully created {len(created_records)} records in '{table_name}' in batch")
+            return created_records
+        except Exception as e:
+            logger.error(f"Error during batch creation in '{table_name}': {e}")
+            return []
+
+    def update_records_batch(self, table_name, records_data):
+        """
+        Update multiple records in a table with a single API call.
+
+        Args:
+            table_name (str): The name of the table to update records in.
+            records_data (list): A list of dictionaries, each containing 'id' key with record ID 
+                                and 'fields' key with a dictionary of fields to update.
+
+        Returns:
+            list: The updated records or empty list on failure.
+        """
+        try:
+            if not records_data:
+                logger.warning(f"No records provided for batch update in '{table_name}'")
+                return []
+
+            table = self.get_table(table_name)
+            updated_records = table.batch_update(records_data)
+            logger.info(f"Successfully updated {len(updated_records)} records in '{table_name}' in batch")
+            return updated_records
+        except Exception as e:
+            logger.error(f"Error during batch update in '{table_name}': {e}")
             return []
 
     def get_records_from_view(self, table_name, view):

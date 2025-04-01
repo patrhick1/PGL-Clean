@@ -250,4 +250,133 @@ tr:hover {
     color: #666;
     font-size: 0.9em;
     margin-left: 10px;
+}
+
+/* Admin Dashboard Specific Styles */
+.admin-section {
+    background: #fff;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.admin-section h2 {
+    color: #2c3e50;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #eee;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    color: #666;
+    font-weight: 500;
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.result-section {
+    margin-top: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.result-section pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-family: monospace;
+    font-size: 12px;
+}
+
+.error {
+    color: #dc3545;
+    padding: 10px;
+    background: #fff3f3;
+    border-radius: 4px;
+    margin-top: 10px;
+}
+
+/* Task Management Styles */
+.task-list {
+    margin-top: 15px;
+}
+
+.task-item {
+    background: #f8f9fa;
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.task-item .task-info {
+    flex: 1;
+}
+
+.task-item .task-actions {
+    display: flex;
+    gap: 10px;
+}
+
+/* Status Indicators */
+.status-section {
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 4px;
+}
+
+.status-section.success {
+    background: #d4edda;
+    color: #155724;
+}
+
+.status-section.error {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.status-section.running {
+    background: #cce5ff;
+    color: #004085;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .form-group input,
+    .form-group select {
+        width: 100%;
+    }
+    
+    .task-item {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .task-item .task-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
 } 

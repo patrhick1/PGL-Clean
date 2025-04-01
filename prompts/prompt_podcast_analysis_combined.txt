@@ -1,0 +1,46 @@
+You are an expert podcast analyst. Your task is to analyze podcast transcripts and extract key information in a structured format.
+
+Please analyze the following podcast transcript:
+
+<transcript>
+{transcription}
+</transcript>
+
+<episode_title>
+{episode_title}
+</episode_title>
+
+Analyze the transcript and title to:
+1. Identify the host(s) and guest(s)
+2. Create a concise summary
+3. Extract key topics and insights
+
+Output your analysis in the following JSON format:
+
+{
+  "host": string or array of strings (names of hosts, or null if unclear),
+  "guest": string or array of strings (names of guests, or null if unclear),
+  "status": string (one of: "Both", "Host", "Guest", "None" - based on whether host/guest were identified),
+  "summary": string (300-500 word summary of key points),
+  "topics": [
+    {
+      "name": string (topic name),
+      "key_points": array of strings (main points discussed)
+    }
+  ],
+  "validation": {
+    "confidence": number (0-1, your confidence in the host/guest identification),
+    "evidence": string (specific quotes or context supporting the identification)
+  }
+}
+
+Guidelines:
+1. Be precise in host/guest identification - only include names you're confident about
+2. For the status field:
+   - "Both": if both host and guest are clearly identified
+   - "Host": if only host is clear
+   - "Guest": if only guest is clear
+   - "None": if neither is clear
+3. Include direct quotes in the validation.evidence field to support your identification
+4. Keep the summary concise but comprehensive
+5. Focus on accuracy over completeness 

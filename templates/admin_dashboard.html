@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PGL Admin Dashboard</title>
+    <link rel="stylesheet" href="/static/dashboard.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .admin-user-info {
+            display: flex;
+            align-items: center;
+        }
+        
+        .admin-badge {
+            background-color: #4a6cf7;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+        
+        .admin-section {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background-color 0.3s;
+        }
+        
+        .btn-primary {
+            background-color: #4a6cf7;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background-color: #3451b2;
+        }
+        
+        .result-section {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .error {
+            color: #dc3545;
+            background-color: #f8d7da;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        
+        .success {
+            color: #28a745;
+            background-color: #d4edda;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        
+        .logout-button {
+            background-color: #f44336;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 4px;
+            text-decoration: none;
+            transition: background-color 0.3s;
+        }
+        
+        .logout-button:hover {
+            background-color: #d32f2f;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="admin-header">
+            <div class="admin-user-info">
+                <h1>PGL Admin Dashboard</h1>
+                <div class="admin-badge">{{ role }}</div>
+            </div>
+            <div>
+                <span>Logged in as: <strong>{{ username }}</strong></span>
+                <a href="/logout" class="logout-button">Logout</a>
+            </div>
+        </div>
+
+        <!-- AI Usage Analysis Section -->
+        <div class="admin-section">
+            <h2><i class="fas fa-chart-line"></i> AI Usage Analysis</h2>
+            <form id="aiUsageForm">
+                <div class="form-group">
+                    <label for="startDate">Start Date (YYYY-MM-DD)</label>
+                    <input type="date" id="startDate" name="start_date">
+                </div>
+                <div class="form-group">
+                    <label for="endDate">End Date (YYYY-MM-DD)</label>
+                    <input type="date" id="endDate" name="end_date">
+                </div>
+                <div class="form-group">
+                    <label for="groupBy">Group By</label>
+                    <select id="groupBy" name="group_by">
+                        <option value="model">Model</option>
+                        <option value="workflow">Workflow</option>
+                        <option value="endpoint">Endpoint</option>
+                        <option value="podcast_id">Podcast ID</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="format">Output Format</label>
+                    <select id="format" name="format">
+                        <option value="json">JSON</option>
+                        <option value="csv">CSV</option>
+                        <option value="text">Text</option>
+                    </select>
+                </div>
+                <div class="button-group">
+                    <button type="submit" class="btn btn-primary">Generate Report</button>
+                </div>
+            </form>
+            <div id="aiUsageResult" class="result-section"></div>
+        </div>
+
+        <!-- Podcast Cost Analysis Section -->
+        <div class="admin-section">
+            <h2><i class="fas fa-calculator"></i> Podcast Cost Analysis</h2>
+            <form id="podcastCostForm">
+                <div class="form-group">
+                    <label for="podcastId">Podcast ID</label>
+                    <input type="text" id="podcastId" name="podcast_id" placeholder="Enter Airtable podcast record ID">
+                </div>
+                <div class="button-group">
+                    <button type="submit" class="btn btn-primary">Analyze Cost</button>
+                </div>
+            </form>
+            <div id="podcastCostResult" class="result-section"></div>
+        </div>
+
+        <!-- Storage Status Section -->
+        <div class="admin-section">
+            <h2><i class="fas fa-database"></i> Storage Status</h2>
+            <div class="button-group">
+                <button id="checkStorage" class="btn btn-primary">Check Storage Status</button>
+            </div>
+            <div id="storageStatus" class="result-section"></div>
+        </div>
+
+        <!-- Quick Links Section -->
+        <div class="admin-section">
+            <h2><i class="fas fa-link"></i> Quick Links</h2>
+            <div class="button-group">
+                <a href="/" class="btn btn-primary">Go to Automation Dashboard</a>
+                <a href="/llm-test" class="btn btn-primary">LLM Test Dashboard</a>
+            </div>
+        </div>
+
+        <!-- Podcast Cost Dashboard Section -->
+        <div class="admin-section">
+            <h2><i class="fas fa-chart-bar"></i> Podcast Cost Dashboard</h2>
+            <form id="podcastCostDashboardForm">
+                <div class="form-group">
+                    <label for="podcastCostDashboardId">Podcast ID</label>
+                    <input type="text" id="podcastCostDashboardId" name="podcast_id" placeholder="Enter Airtable podcast record ID">
+                </div>
+                <div class="button-group">
+                    <button type="submit" class="btn btn-primary">View Cost Dashboard</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/dashboard.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // AI Usage Report Form
+            const aiUsageForm = document.getElementById('aiUsageForm');
+            if (aiUsageForm) {
+                aiUsageForm.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    const formData = new FormData(aiUsageForm);
+                    const params = new URLSearchParams(formData);
+                    const format = formData.get('format');
+                    
+                    try {
+                        const response = await fetch(`/ai-usage?${params.toString()}`);
+                        
+                        // Handle different format responses accordingly
+                        if (format === 'json') {
+                            const data = await response.json();
+                            document.getElementById('aiUsageResult').innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                        } else if (format === 'csv' || format === 'text') {
+                            const textData = await response.text();
+                            
+                            // Display in the UI
+                            document.getElementById('aiUsageResult').innerHTML = `<pre>${textData}</pre>`;
+                            
+                            // Also trigger download
+                            const blob = new Blob([textData], { 
+                                type: format === 'csv' ? 'text/csv' : 'text/plain' 
+                            });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.style.display = 'none';
+                            a.href = url;
+                            
+                            // Set appropriate filename with date
+                            const today = new Date();
+                            const dateStr = today.toISOString().split('T')[0];
+                            a.download = format === 'csv' 
+                                ? `ai_usage_report_${dateStr}.csv` 
+                                : `ai_usage_report_${dateStr}.txt`;
+                            
+                            // Trigger download
+                            document.body.appendChild(a);
+                            a.click();
+                            
+                            // Cleanup
+                            window.setTimeout(() => {
+                                document.body.removeChild(a);
+                                URL.revokeObjectURL(url);
+                            }, 0);
+                        } else {
+                            const data = await response.json();
+                            document.getElementById('aiUsageResult').innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                        }
+                    } catch (error) {
+                        console.error('Error fetching AI usage:', error);
+                        document.getElementById('aiUsageResult').innerHTML = 
+                            `<div class="error">Error fetching AI usage data: ${error.message}</div>`;
+                    }
+                });
+            }
+
+            // Podcast Cost Form
+            const podcastCostForm = document.getElementById('podcastCostForm');
+            if (podcastCostForm) {
+                podcastCostForm.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    const podcastId = document.getElementById('podcastId').value;
+                    
+                    try {
+                        const response = await fetch(`/podcast-cost/${podcastId}`);
+                        const data = await response.json();
+                        document.getElementById('podcastCostResult').innerHTML = 
+                            `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                    } catch (error) {
+                        console.error('Error fetching podcast cost:', error);
+                        document.getElementById('podcastCostResult').innerHTML = 
+                            `<div class="error">Error fetching podcast cost data: ${error.message}</div>`;
+                    }
+                });
+            }
+
+            // Storage Status Check
+            const checkStorageBtn = document.getElementById('checkStorage');
+            if (checkStorageBtn) {
+                checkStorageBtn.addEventListener('click', async function() {
+                    try {
+                        const response = await fetch('/storage-status');
+                        const data = await response.json();
+                        document.getElementById('storageStatus').innerHTML = 
+                            `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                    } catch (error) {
+                        console.error('Error checking storage status:', error);
+                        document.getElementById('storageStatus').innerHTML = 
+                            `<div class="error">Error checking storage status: ${error.message}</div>`;
+                    }
+                });
+            }
+
+            // Podcast Cost Dashboard Form
+            const podcastCostDashboardForm = document.getElementById('podcastCostDashboardForm');
+            if (podcastCostDashboardForm) {
+                podcastCostDashboardForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const podcastId = document.getElementById('podcastCostDashboardId').value;
+                    if (podcastId) {
+                        window.location.href = `/podcast-cost-dashboard/${podcastId}`;
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html> 

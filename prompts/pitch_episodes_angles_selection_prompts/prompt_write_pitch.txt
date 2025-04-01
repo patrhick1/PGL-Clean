@@ -19,11 +19,11 @@ Here are your client's speaking angles:
 {TextAngles}
 
 Give your ouput in the following JSON format:
-{
+{{
 "Topic 1" : "" ,
 "Description 1" : "" ,
 "Topic 2" : "" ,
 "Description 2" : "",
 "Topic 3" : "",
 "Description 3" : "" 
-}
+}}

@@ -37,7 +37,7 @@ This project contains automation workflows for podcast guest management and outr
 The main FastAPI application (`main_fastapi.py`) exposes several endpoints to trigger different automation workflows:
 
 - `/trigger_automation?action=summary_host_guest`: Process podcast summaries and identify hosts and guests
-- `/trigger_automation?action=encrich_host_name`: Enrich host name data
+- `/trigger_automation?action=enrich_host_name`: Enrich host name data
 - `/trigger_automation?action=determine_fit`: Determine if a guest is a good fit for a podcast
 - `/trigger_automation?action=pitch_episode_angle`: Select episodes and angles for pitches
 - `/trigger_automation?action=pitch_writer`: Generate pitch content

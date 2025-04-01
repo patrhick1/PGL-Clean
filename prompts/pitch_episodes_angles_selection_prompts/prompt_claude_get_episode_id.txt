@@ -19,7 +19,5 @@ As output, give ONLY the Episode ID for the episode that will be the best to ref
 
 Give your output containing ONLY the selected Episode ID in JSON:
 <output_example>
-{
-ID=
-}
+ID= recfGU13jnmtWtLRF
 </output_example>

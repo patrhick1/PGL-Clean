@@ -56,12 +56,27 @@ COST_RATES = {
         'input': 0.003,  # Per 1K input tokens
         'output': 0.015  # Per 1K output tokens
     },
-    # Default fallback if model not found
+    # Google models
+    'gemini-2.0-flash': {
+        'input': 0.00025,  # Per 1K input tokens
+        'output': 0.00125  # Per 1K output tokens
+    },
+    'gemini-1.5-flash': {
+        'input': 0.00025,  # Per 1K input tokens
+        'output': 0.00125  # Per 1K output tokens
+    },
+
+    'o3-mini': {
+        'input': 0.0011,  # Per 1K input tokens
+        'output': 0.0044  # Per 1K output tokens
+    },
+    # Default fallback
     'default': {
         'input': 0.01,
         'output': 0.03
     }
 }
+
 
 class AIUsageTracker:
     """
@@ -611,14 +626,14 @@ class AIUsageTracker:
                     'tokens_in': 0,
                     'tokens_out': 0,
                     'total_tokens': 0,
-                    'cost': 0
+                    'cost': 0.0  # Ensure cost is initialized as float
                 }
             
             stages[workflow]['calls'] += 1
             stages[workflow]['tokens_in'] += entry['tokens_in']
             stages[workflow]['tokens_out'] += entry['tokens_out']
             stages[workflow]['total_tokens'] += entry['total_tokens']
-            stages[workflow]['cost'] += entry['cost']
+            stages[workflow]['cost'] += float(entry['cost'] or 0.0)  # Ensure cost is a float
         
         # Create timeline of operations
         timeline = []
@@ -627,20 +642,20 @@ class AIUsageTracker:
                 'timestamp': entry['timestamp'],
                 'workflow': entry['workflow'],
                 'model': entry['model'],
-                'tokens_in': entry['tokens_in'],
-                'tokens_out': entry['tokens_out'],
-                'total_tokens': entry['total_tokens'],
-                'cost': entry['cost']
+                'tokens_in': entry['tokens_in'] or 0,
+                'tokens_out': entry['tokens_out'] or 0,
+                'total_tokens': entry['total_tokens'] or 0,
+                'cost': float(entry['cost'] or 0.0)  # Ensure cost is a float
             })
         
         # Prepare the report
         report = {
             "podcast_id": podcast_id,
-            "total_cost": total_cost,
-            "total_tokens_in": total_tokens_in,
-            "total_tokens_out": total_tokens_out,
-            "total_tokens": total_tokens,
-            "total_calls": total_calls,
+            "total_cost": float(total_cost or 0.0),  # Ensure total_cost is a float
+            "total_tokens_in": total_tokens_in or 0,
+            "total_tokens_out": total_tokens_out or 0,
+            "total_tokens": total_tokens or 0,
+            "total_calls": total_calls or 0,
             "workflow_stages": stages,
             "timeline": timeline
         }

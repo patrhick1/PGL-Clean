@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Test Dashboard</title>
+    <link rel="stylesheet" href="/static/dashboard.css">
+    <style>
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .card {
+            background-color: #fff;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .form-control {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .btn {
+            display: inline-block;
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .btn-danger {
+            background-color: #f44336;
+        }
+        .btn-info {
+            background-color: #2196F3;
+        }
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .results-table th, .results-table td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        .results-table th {
+            background-color: #f2f2f2;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .status-running {
+            background-color: #2196F3;
+            color: white;
+        }
+        .status-completed {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .status-error {
+            background-color: #f44336;
+            color: white;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>LLM Test Dashboard</h1>
+        <div class="card">
+            <h2>Run Test Workflow</h2>
+            <form id="testForm">
+                <div class="form-group">
+                    <label for="workflow">Workflow to Test:</label>
+                    <select id="workflow" name="workflow" class="form-control" required>
+                        <option value="">Select a workflow</option>
+                        <option value="determine_fit">Determine Fit</option>
+                        <option value="summary_host_guest">Summary Host/Guest Identification</option>
+                        <option value="pitch_episode_angle">Pitch Episode Selection</option>
+                        <option value="pitch_writer">Pitch Writer</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="model">LLM Model:</label>
+                    <select id="model" name="model" class="form-control" required>
+                        <option value="">Select a model</option>
+                        <option value="gemini_flash">Gemini 2.0 Flash</option>
+                        <option value="claude_haiku">Claude 3.5 Haiku</option>
+                        <option value="claude_sonnet">Claude 3.5 Sonnet</option>
+                        <option value="o3_mini">OpenAI o3-mini</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="limit">Record Limit (optional):</label>
+                    <input type="number" id="limit" name="limit" class="form-control" min="1" max="100" placeholder="Number of records to process">
+                </div>
+                
+                <div class="form-group">
+                    <label for="batch_size">Batch Size (optional):</label>
+                    <input type="number" id="batch_size" name="batch_size" class="form-control" min="1" max="10" placeholder="Default: 5">
+                </div>
+                
+                <div class="form-group">
+                    <label for="concurrency">Concurrency (optional):</label>
+                    <input type="number" id="concurrency" name="concurrency" class="form-control" min="1" max="5" placeholder="Default: 3">
+                </div>
+                
+                <div class="form-group">
+                    <label for="test_name">Test Name (for tracking):</label>
+                    <input type="text" id="test_name" name="test_name" class="form-control" required placeholder="e.g., gemini_fit_test_1">
+                </div>
+                
+                <button type="submit" class="btn">Run Test</button>
+            </form>
+        </div>
+        
+        <div id="activeTests" class="card hidden">
+            <h2>Active Tests</h2>
+            <table class="results-table">
+                <thead>
+                    <tr>
+                        <th>Test ID</th>
+                        <th>Workflow</th>
+                        <th>Model</th>
+                        <th>Status</th>
+                        <th>Progress</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="activeTestsBody">
+                    <!-- Active tests will be added here -->
+                </tbody>
+            </table>
+        </div>
+        
+        <div id="completedTests" class="card hidden">
+            <h2>Completed Tests</h2>
+            <table class="results-table">
+                <thead>
+                    <tr>
+                        <th>Test Name</th>
+                        <th>Workflow</th>
+                        <th>Model</th>
+                        <th>Records</th>
+                        <th>Total Tokens</th>
+                        <th>Cost</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="completedTestsBody">
+                    <!-- Completed tests will be added here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize the dashboard
+            loadActiveTests();
+            loadCompletedTests();
+            
+            // Handle form submission
+            document.getElementById('testForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                runTest();
+            });
+            
+            // Setup refresh intervals
+            setInterval(loadActiveTests, 5000);  // Refresh active tests every 5 seconds
+            setInterval(loadCompletedTests, 10000);  // Refresh completed tests every 10 seconds
+        });
+        
+        function runTest() {
+            const workflow = document.getElementById('workflow').value;
+            const model = document.getElementById('model').value;
+            const limit = document.getElementById('limit').value;
+            const batchSize = document.getElementById('batch_size').value;
+            const concurrency = document.getElementById('concurrency').value;
+            const testName = document.getElementById('test_name').value;
+            
+            // Prepare request data
+            const data = {
+                workflow: workflow,
+                model: model,
+                test_name: testName
+            };
+            
+            if (limit) data.limit = parseInt(limit);
+            if (batchSize) data.batch_size = parseInt(batchSize);
+            if (concurrency) data.concurrency = parseInt(concurrency);
+            
+            // Make API call to start the test
+            fetch('/api/run_test', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                } else {
+                    alert('Test started successfully. Test ID: ' + data.test_id);
+                    loadActiveTests();
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while starting the test.');
+            });
+        }
+        
+        function loadActiveTests() {
+            fetch('/api/active_tests')
+                .then(response => response.json())
+                .then(data => {
+                    const tbody = document.getElementById('activeTestsBody');
+                    tbody.innerHTML = '';
+                    
+                    if (data.length > 0) {
+                        document.getElementById('activeTests').classList.remove('hidden');
+                        data.forEach(test => {
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td>${test.test_id}</td>
+                                <td>${test.workflow}</td>
+                                <td>${test.model}</td>
+                                <td><span class="status-badge status-${test.status.toLowerCase()}">${test.status}</span></td>
+                                <td>${test.progress || '0'}%</td>
+                                <td>
+                                    <button class="btn btn-danger" onclick="stopTest('${test.test_id}')">Stop</button>
+                                </td>
+                            `;
+                            tbody.appendChild(row);
+                        });
+                    } else {
+                        document.getElementById('activeTests').classList.add('hidden');
+                    }
+                })
+                .catch(error => console.error('Error loading active tests:', error));
+        }
+        
+        function loadCompletedTests() {
+            fetch('/api/completed_tests')
+                .then(response => response.json())
+                .then(data => {
+                    const tbody = document.getElementById('completedTestsBody');
+                    tbody.innerHTML = '';
+                    
+                    if (data.length > 0) {
+                        document.getElementById('completedTests').classList.remove('hidden');
+                        data.forEach(test => {
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td>${test.test_name}</td>
+                                <td>${test.workflow}</td>
+                                <td>${test.model}</td>
+                                <td>${test.records}</td>
+                                <td>${test.total_tokens.toLocaleString()}</td>
+                                <td>$${test.cost.toFixed(4)}</td>
+                                <td>
+                                    <a href="/api/download_results/${test.test_name}" class="btn btn-info">Download CSV</a>
+                                </td>
+                            `;
+                            tbody.appendChild(row);
+                        });
+                    } else {
+                        document.getElementById('completedTests').classList.add('hidden');
+                    }
+                })
+                .catch(error => console.error('Error loading completed tests:', error));
+        }
+        
+        function stopTest(testId) {
+            if (!confirm('Are you sure you want to stop this test?')) return;
+            
+            fetch(`/api/stop_test/${testId}`, { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        alert('Error: ' + data.error);
+                    } else {
+                        alert('Test stopped successfully.');
+                        loadActiveTests();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while stopping the test.');
+                });
+        }
+    </script>
+</body>
+</html> 
