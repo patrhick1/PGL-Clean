@@ -1,0 +1,7 @@
+Flask>=2.0.0,<3.0.0
+Flask-Login>=0.5.0,<0.7.0
+Flask-WTF>=1.0.0,<1.2.0
+Werkzeug>=2.0.0,<3.0.0 # For password hashing; often a Flask dependency but good to specify
+psycopg2-binary>=2.9.0,<2.10.0 # For PostgreSQL connection
+python-dotenv>=0.19.0,<1.1.0 # For loading .env files
+Flask-Bcrypt>=1.0.0,<1.1.0 # Optional: if you prefer bcrypt for hashing 

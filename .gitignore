@@ -8,13 +8,12 @@ credentials.json
 # Data Files
 *.csv
 *.json
-ai_usage_logs.csv
-ai_usage_logs_backup.csv
-last_processed_time.txt
+data/last_processed_time.txt
 
 # Logs
 *.log
 transcriber.log
+outputs/
 
 # Python
 __pycache__/
@@ -42,6 +41,7 @@ ENV/
 # System Files
 .DS_Store
 Thumbs.db
+old script/
 
 # Replit specific
 .replit
@@ -52,6 +52,7 @@ replit.nix
 build/
 dist/
 *.egg-info/
+.pypirc
 
 # Jupyter Notebook
 .ipynb_checkpoints

@@ -1,0 +1,42 @@
+[tool.poetry]
+name = "pgl-project"
+version = "0.1.0"
+description = ""
+authors = ["Your Name <you@example.com>"]
+license = "Proprietary"  # Assuming based on LICENSE.txt not being a common open source one
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"  # Assuming Python 3.9+ compatibility, adjust if needed
+anthropic = ">=0.42.0"
+Flask = "==3.1.0"
+google-api-python-client = ">=2.155.0"
+openai = ">=1.59.4"
+protobuf = ">=5.29.2"
+pyairtable = ">=2.3.6"
+pydantic = ">=2.10.4"
+python-dotenv = ">=1.0.0"
+Requests = "==2.32.3"
+google-auth = ">=2.25.0"
+fastapi = ">=0.103.0"
+uvicorn = ">=0.25.0"
+tabulate = ">=0.9.0"
+google-auth-oauthlib = ">=1.0.0"
+google-auth-httplib2 = ">=0.1.0"
+google-generativeai = ">=0.3.0"
+pandas = ">=2.0.0"
+jinja2 = ">=3.1.0"
+tiktoken = ">=0.5.0"
+langchain-anthropic = ">=0.1.0"
+langchain-google-genai = ">=0.0.5"
+langchain-openai = ">=0.0.5"
+pydub = ">=0.25.0"
+starlette = ">=0.27.0"
+langchain-text-splitters = ">=0.1.0"
+sentence-transformers = ">=2.7.0"
+backoff = ">=2.2.1"
+psycopg2-binary = ">=2.9.10"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api" 

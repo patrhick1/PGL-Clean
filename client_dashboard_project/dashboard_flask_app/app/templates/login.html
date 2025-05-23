@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}Login - Client Dashboard{% endblock %}
+
+{% block content %}
+    <h2>Login</h2>
+    <form method="POST" action="{{ url_for('main.login') }}">
+        {{ form.hidden_tag() }} {# CSRF token #}
+        <div class="form-group">
+            {{ form.username.label }}
+            {{ form.username(size=30) }}
+            {% if form.username.errors %}
+                <ul class="errors">
+                    {% for error in form.username.errors %}<li>{{ error }}</li>{% endfor %}
+                </ul>
+            {% endif %}
+        </div>
+        <div class="form-group">
+            {{ form.password.label }}
+            {{ form.password(size=30) }}
+            {% if form.password.errors %}
+                <ul class="errors">
+                    {% for error in form.password.errors %}<li>{{ error }}</li>{% endfor %}
+                </ul>
+            {% endif %}
+        </div>
+        <div class="form-group">
+            {{ form.submit(class_="btn") }}
+        </div>
+    </form>
+{% endblock %} 

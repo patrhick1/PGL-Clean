@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+    <h2>Client Dashboard</h2>
+    <p>Welcome, {{ current_user.username }}!</p>
+    <p>Your Campaign ID: {{ current_user.get_id() }}</p>
+    <p><em>Analytics will be displayed here.</em></p>
+    <!-- Data display and filters will go here -->
+{% endblock %} 
