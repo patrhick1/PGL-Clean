@@ -13,6 +13,12 @@ from datetime import datetime
 from contextlib import asynccontextmanager
 import sys
 
+# Add the project root directory to sys.path to allow importing 'src'
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_dir) # Go up one level from 'src'
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 # Import the authentication middleware
 from auth_middleware import (
     AuthMiddleware,
@@ -727,4 +733,4 @@ if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
     logger.info(f"Starting FastAPI app on port {port}.")
-    uvicorn.run(app, host='0.0.0.0', port=port, reload=True)
+    uvicorn.run("src.main_fastapi:app", host='0.0.0.0', port=port, reload=True)

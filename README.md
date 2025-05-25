@@ -150,10 +150,10 @@ For comprehensive AI usage tracking documentation, see [AI_USAGE_TRACKING.md](AI
 
 Start the FastAPI server:
 ```
-uvicorn main_fastapi:app --host 0.0.0.0 --port 5000 --reload
+uvicorn main_fastapi:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-The application will be available at: http://localhost:5000
+The application will be available at: http://localhost:8000
 
 ## Authentication
 
