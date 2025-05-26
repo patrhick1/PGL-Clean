@@ -5,6 +5,8 @@ from email.utils import parsedate_to_datetime
 from datetime import datetime, timedelta
 import logging
 import html
+from typing import Optional
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -89,8 +91,8 @@ def _ensure_campaign_manager_record(podcast_id, podcast_name, campaign_id, campa
         safe_podcast_name = podcast_name.replace("'", "\'")
         safe_campaign_name = campaign_name.replace("'", "\'")
 
-        # Search using Podcast text field and CampaignName lookup field
-        cm_formula = f"AND({{Podcast}} = '{safe_podcast_name}', {{CampaignName}} = '{safe_campaign_name}')"
+        # Search using Podcast text field and Campaigns lookup field
+        cm_formula = f"AND({{Podcast}} = '{safe_podcast_name}', {{Campaigns}} = '{safe_campaign_name}')"
 
         # Previous formula using FIND/ARRAYJOIN:
         # cm_formula = f"AND(FIND('{podcast_id}', ARRAYJOIN({{Podcast Name}})), FIND('{campaign_id}', ARRAYJOIN({{Campaigns}})))"
@@ -123,7 +125,7 @@ def _ensure_campaign_manager_record(podcast_id, podcast_name, campaign_id, campa
 
 class DataProcessor:
 
-    def process_podcast_result_with_listennotes(self, result, campaign_id, campaign_name, airtable_service, podscan_podcast_id=None):
+    def process_podcast_result_with_listennotes(self, result, campaign_id, campaign_name, airtable_service, podscan_podcast_id=None, stop_flag: Optional[threading.Event] = None):
         """
         Processes a single podcast result from ListenNotes search and updates Airtable.
         """
@@ -194,15 +196,15 @@ class DataProcessor:
             field_to_update["Podcast id"] = podscan_podcast_id
             # "Source": "ListenNotes/Podscan" # Removed as per user edit
 
-        # Check if the record already exists by email using filterByFormula
-        logger.info(f"Searching for existing podcast with email: {email}")
-        formula = f"{{Email}} = '{email}'"
+        # Check if the record already exists by RSS Feed URL using filterByFormula
+        logger.info(f"Searching for existing podcast with RSS Feed: {rss_url}")
+        formula = f"{{RSS Feed}} = '{rss_url}'"
         existing_records = airtable_service.search_records('Podcasts', formula=formula)
 
         if existing_records:
             record_id = existing_records[0]['id']
             record_fields = existing_records[0]['fields']
-            logger.info(f"Found existing record for {podcast_name} (ID: {record_id}) with email {email}. Preparing update.")
+            logger.info(f"Found existing record for {podcast_name} (ID: {record_id}) with RSS Feed {rss_url}. Preparing update.")
             # Log the data being sent for update
             # logger.debug(f"Update data for {record_id}: {json.dumps(field_to_update, indent=2)}") # Optional: log full data
             try:
@@ -222,8 +224,8 @@ class DataProcessor:
             except Exception as e:
                 logger.error(f"Failed to update record {record_id} for {podcast_name}: {e}")
         else:
-            # No existing podcast record found by email, create new podcast AND campaign manager record
-            logger.info(f"No existing record found for email {email}. Preparing to create new record for {podcast_name}.")
+            # No existing podcast record found by RSS Feed URL, create new podcast AND campaign manager record
+            logger.info(f"No existing record found for RSS Feed {rss_url}. Preparing to create new record for {podcast_name}.")
             # Add campaign link for the new record
             field_to_update['Campaign'] = [campaign_id]
             try:
@@ -236,12 +238,12 @@ class DataProcessor:
                     # Ensure Campaign Manager record exists for the new podcast (passing campaign_name)
                     _ensure_campaign_manager_record(new_podcast_id, podcast_name, campaign_id, campaign_name, airtable_service)
                 else:
-                     logger.error(f"Failed to create new podcast record for {podcast_name} with email {email}, cannot create Campaign Manager record.")
+                     logger.error(f"Failed to create new podcast record for {podcast_name} with RSS Feed {rss_url}, cannot create Campaign Manager record.")
 
             except Exception as e:
-                 logger.error(f"Failed to create new podcast record for {podcast_name} with email {email}: {e}")
+                 logger.error(f"Failed to create new podcast record for {podcast_name} with RSS Feed {rss_url}: {e}")
 
-    def process_podcast_result_with_podscan(self, result, campaign_id, campaign_name, airtable_service):
+    def process_podcast_result_with_podscan(self, result, campaign_id, campaign_name, airtable_service, stop_flag: Optional[threading.Event] = None):
         """
         Processes a single podcast result from Podscan search and updates Airtable.
         """
@@ -276,15 +278,15 @@ class DataProcessor:
         if last_posted_at:
             field_to_update["Last Published Date"] = last_posted_at
 
-        # Check if the record already exists by email using filterByFormula
-        logger.info(f"Searching for existing Podscan podcast with email: {email}")
-        formula = f"{{Email}} = '{email}'"
+        # Check if the record already exists by RSS Feed URL using filterByFormula
+        logger.info(f"Searching for existing Podscan podcast with RSS Feed: {rss_url}")
+        formula = f"{{RSS Feed}} = '{rss_url}'"
         existing_records = airtable_service.search_records('Podcasts', formula=formula)
 
         if existing_records:
             record_id = existing_records[0]['id']
             record_fields = existing_records[0]['fields']
-            logger.info(f"Found existing record for Podscan podcast {podcast_name} (ID: {record_id}) with email {email}. Preparing update.")
+            logger.info(f"Found existing record for Podscan podcast {podcast_name} (ID: {record_id}) with RSS Feed {rss_url}. Preparing update.")
             # logger.debug(f"Update data for {record_id}: {json.dumps(field_to_update, indent=2)}") # Optional
             try:
                 # Add current campaign to existing list if not present
@@ -305,7 +307,7 @@ class DataProcessor:
                 logger.error(f"Failed to update Podscan record {record_id} for {podcast_name}: {e}")
         else:
             # No existing record found, create new podcast AND campaign manager record
-            logger.info(f"No existing record found for email {email}. Preparing to create new Podscan record for {podcast_name}.")
+            logger.info(f"No existing record found for RSS Feed {rss_url}. Preparing to create new Podscan record for {podcast_name}.")
             # logger.debug(f"Create data for {podcast_name}: {json.dumps(field_to_update, indent=2)}") # Optional
             # Add campaign link for the new record
             field_to_update['Campaign'] = [campaign_id]
@@ -318,9 +320,9 @@ class DataProcessor:
                     # Ensure Campaign Manager record exists for the new podcast (passing campaign_name)
                     _ensure_campaign_manager_record(new_podcast_id, podcast_name, campaign_id, campaign_name, airtable_service)
                 else:
-                    logger.error(f"Failed to create new Podscan record for {podcast_name} with email {email}, cannot create Campaign Manager record.")
+                    logger.error(f"Failed to create new Podscan record for {podcast_name} with RSS Feed {rss_url}, cannot create Campaign Manager record.")
             except Exception as e:
-                 logger.error(f"Failed to create new Podscan record for {podcast_name} with email {email}: {e}")
+                 logger.error(f"Failed to create new Podscan record for {podcast_name} with RSS Feed {rss_url}: {e}")
 
 
 def generate_prompt(placeholders, prompt_file):

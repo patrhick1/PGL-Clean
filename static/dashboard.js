@@ -174,6 +174,24 @@ async function handleMIPRSearch() {
     }
 }
 
+// NEW FUNCTION: Trigger Batch Podcast Fetcher with Campaign Record ID
+async function triggerBatchPodcastFetch() {
+    const campaignRecordId = document.getElementById('campaign-record-id').value.trim();
+    
+    if (!campaignRecordId) {
+        showStatusMessage('Please enter an Airtable Campaign Record ID.', 'error');
+        return;
+    }
+    
+    // Confirm before starting the batch process
+    if (!confirm("This will start the batch podcast fetch process for Campaign Record ID: " + campaignRecordId + ". Continue?")) {
+        return;
+    }
+
+    // Call the generic triggerAutomation function with the specific action and ID
+    triggerAutomation('batch_podcast_fetch', campaignRecordId);
+}
+
 // Function to generate AI usage report
 function generateAIUsageReport() {
     const startDate = document.getElementById('start-date').value;

@@ -680,6 +680,39 @@ if __name__ == "__main__":
         
     logger.info("--- Finished Testing Client Name Search Formula ---")
 
+    # --- Test Fetching Episodes by Podcast ID --- # NEW TEST
+    logger.info("--- Testing Fetching Episodes by Podcast ID ---")
+    
+    podcast_name = "Convergence"
+    episodes_table_name = "Podcast_Episodes"
+    podcast_link_field_name = "Podcast"
+    
+    # Construct the search formula using FIND and ARRAYJOIN for the linked record field
+    episode_search_formula = f'{{{podcast_link_field_name}}} = "{podcast_name}"'
+    
+    logger.info(f"Searching '{episodes_table_name}' for podcast ID '{podcast_name}' using formula: {episode_search_formula}")
+    
+    try:
+        linked_episodes = production_service.search_records(
+            table_name=episodes_table_name,
+            formula=episode_search_formula
+        )
+        
+        if linked_episodes:
+            logger.info(f"Found {len(linked_episodes)} episodes linked to podcast ID '{podcast_name}'.")
+            logger.info("First few linked episodes (or all if fewer than 5):")
+            for i, record in enumerate(linked_episodes[:5]):
+                episode_title = record.get('fields', {}).get('Episode Title', 'No Title')
+                episode_url = record.get('fields', {}).get('Episode URL', 'No URL')
+                logger.info(f"  - Record ID: {record.get('id')}, Title: {episode_title}, URL: {episode_url}")
+        else:
+            logger.info(f"No episodes found linked to podcast ID '{podcast_name}' using the formula.")
+            
+    except Exception as e:
+        logger.error(f"Error during test search for episodes linked to podcast ID '{podcast_name}': {e}", exc_info=True)
+        
+    logger.info("--- Finished Testing Fetching Episodes by Podcast ID ---")
+
     # You can keep or remove the older test below
     # logger.info("--- Original Test: Fetching first 2 CM records ---")
     # cm_records = production_service.search_records('Campaign Manager')

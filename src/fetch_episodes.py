@@ -2,7 +2,7 @@ import logging
 from airtable_service import PodcastService
 from external_api_service import PodscanFM
 from data_processor import parse_date # Assuming this is a robust date parser
-from datetime import datetime, timedelta, timezone # Added timezone for robust date comparisons
+from datetime import datetime, timedelta, timezone
 import threading
 from typing import Optional, List, Dict, Any
 from collections import defaultdict
@@ -176,6 +176,16 @@ def fetch_episodes_from_rss(rss_url: str, max_episodes: int = 30, stop_flag: Opt
 
 # --- End RSS Fetching Logic ---
 
+def get_episode_identifier(episode: Dict[str, Any]) -> Optional[str]:
+    """
+    Generates a unique identifier for an episode, prioritizing episode_id (GUID)
+    and falling back to episode_audio_url. Prefixes are added to prevent collisions.
+    """
+    if episode.get("episode_id"):
+        return f"GUID_{episode['episode_id']}"
+    elif episode.get("episode_audio_url"):
+        return f"URL_{episode['episode_audio_url']}"
+    return None
 
 def get_podcast_episodes(stop_flag: Optional[threading.Event] = None):
     """
@@ -262,11 +272,8 @@ def _process_single_podcast(podcast_record: Dict[str, Any], stop_flag: Optional[
                     logger.info(f"Podscan fetch returned no episodes for '{podcast_name}'.")
             except Exception as e:
                 logger.warning(f"Error fetching from Podscan for {podcast_name} (ID: {podcast_id}): {e}. Trying RSS fallback.")
-                # Do NOT clear all_fetched_episodes here if Podscan failed,
-                # as we might still have some partial data or want to combine with RSS.
-                # For this specific case, if Podscan fails, we treat it as if it returned nothing
-                # and rely on RSS. So, clearing is appropriate if Podscan is the primary source.
-                all_fetched_episodes = [] # Clear if Podscan failed, so RSS can populate
+                # Clear if Podscan failed, so RSS can populate
+                all_fetched_episodes = [] 
 
         # -------------------- 2. Fallback to RSS --------------------
         # Always try RSS if Podscan failed or didn't provide enough, or if no Podscan ID
@@ -299,60 +306,62 @@ def _process_single_podcast(podcast_record: Dict[str, Any], stop_flag: Optional[
 
         # -------------------- 4. Fetch existing episodes from Airtable --------------------
         existing_airtable_episodes = []
-        existing_episode_map = {} # Map episode_url -> airtable_record (for quick lookup of original Airtable data)
+        # Map Airtable record ID to its full record data for quick lookup of original fields
+        existing_airtable_records_by_id = {} 
         try:
             # Fetch all episodes linked to this podcast
-            formula = f"{{Podcast}} = '{record_id}'"
+            formula = f'{{Podcast}} = "{podcast_name}"'
             existing_airtable_episodes = airtable.search_records(episodes_table, formula=formula)
             logger.info(f"Found {len(existing_airtable_episodes)} existing episodes in Airtable for '{podcast_name}'.")
             for rec in existing_airtable_episodes:
-                episode_url = rec['fields'].get('Episode URL')
-                if episode_url:
-                    existing_episode_map[episode_url] = rec
+                existing_airtable_records_by_id[rec['id']] = rec
         except Exception as e:
             logger.error(f"Error fetching existing episodes for '{podcast_name}' from Airtable: {e}")
 
         # -------------------- 5. Consolidate, Deduplicate, and Sort all episodes (PRIORITIZING AIRTABLE) --------------------
         master_episode_list = []
-        episode_url_to_master_index = {} # Map episode_url to its index in master_episode_list
+        # Map episode identifier (GUID or URL) to its index in master_episode_list
+        master_episode_lookup = {} 
 
         # 5.1. Populate master_episode_list with existing Airtable data (PRIORITY)
-        for rec in existing_airtable_episodes:
-            episode_url = rec['fields'].get('Episode URL')
-            if not episode_url:
-                logger.warning(f"Existing Airtable episode '{rec['id']}' has no Episode URL. Skipping for master list.")
-                continue
-
-            posted_at_str = rec['fields'].get('Published')
+        for rec_id, rec_data in existing_airtable_records_by_id.items():
+            # Create a temporary episode dict from Airtable record for consistent processing
+            airtable_episode_data = {
+                "episode_title": rec_data['fields'].get('Episode Title'),
+                "episode_description": rec_data['fields'].get('Summary'),
+                "episode_id": rec_data['fields'].get('Episode ID'),
+                "episode_audio_url": rec_data['fields'].get('Episode URL'),
+                "episode_url": rec_data['fields'].get('Episode Web Link'),
+                "episode_transcript": rec_data['fields'].get('Transcription'), # Keep existing transcript
+                "airtable_record_id": rec_id, # Store Airtable ID for updates/deletes
+                "was_fetched_externally": False, # Assume not fetched externally yet
+                "was_fetched_from_podscan": False, # Assume not from Podscan yet
+            }
+            
+            # Standardize date from Airtable
+            posted_at_str = rec_data['fields'].get('Published')
             posted_at_dt = None
             if posted_at_str:
                 try:
                     # Airtable date format is YYYY-MM-DD
                     posted_at_dt = datetime.strptime(posted_at_str, '%Y-%m-%d').replace(tzinfo=None)
                 except ValueError:
-                    logger.warning(f"Could not parse Airtable date '{posted_at_str}' for existing episode '{rec['fields'].get('Episode Title')}'.")
+                    logger.warning(f"Could not parse Airtable date '{posted_at_str}' for existing episode '{airtable_episode_data.get('episode_title')}'.")
+            airtable_episode_data["posted_at"] = posted_at_dt
 
-            # Create a base entry from Airtable data
-            airtable_episode_data = {
-                "episode_title": rec['fields'].get('Episode Title'),
-                "episode_description": rec['fields'].get('Summary'),
-                "episode_id": rec['fields'].get('Episode ID'),
-                "episode_audio_url": episode_url,
-                "posted_at": posted_at_dt, # Store datetime object
-                "episode_url": rec['fields'].get('Episode Web Link'),
-                "episode_transcript": rec['fields'].get('Transcription'), # Keep existing transcript
-                "airtable_record_id": rec['id'], # Store Airtable ID for updates/deletes
-                "was_fetched_externally": False, # Assume not fetched externally yet
-                "was_fetched_from_podscan": False, # Assume not from Podscan yet
-            }
+            identifier = get_episode_identifier(airtable_episode_data)
+            if not identifier:
+                logger.warning(f"Existing Airtable episode '{rec_id}' has no valid identifier (GUID/URL). Skipping for master list.")
+                continue
+
             master_episode_list.append(airtable_episode_data)
-            episode_url_to_master_index[episode_url] = len(master_episode_list) - 1
+            master_episode_lookup[identifier] = len(master_episode_list) - 1
 
-        # 5.2. Integrate newly fetched episodes, merging where URLs match
+        # 5.2. Integrate newly fetched episodes, merging where identifiers match
         for new_episode in all_fetched_episodes:
-            episode_url = new_episode.get("episode_audio_url")
-            if not episode_url:
-                logger.warning(f"Skipping fetched episode '{new_episode.get('episode_title', 'N/A')}' due to missing audio URL.")
+            identifier = get_episode_identifier(new_episode)
+            if not identifier:
+                logger.warning(f"Skipping fetched episode '{new_episode.get('episode_title', 'N/A')}' due to missing identifier (GUID/URL).")
                 continue
 
             # Standardize date for the new episode
@@ -361,9 +370,9 @@ def _process_single_podcast(podcast_record: Dict[str, Any], stop_flag: Optional[
             elif isinstance(new_episode.get("posted_at"), datetime) and new_episode["posted_at"].tzinfo:
                 new_episode["posted_at"] = new_episode["posted_at"].astimezone(timezone.utc).replace(tzinfo=None)
 
-            if episode_url in episode_url_to_master_index:
+            if identifier in master_episode_lookup:
                 # Episode exists in Airtable (already in master_episode_list), MERGE new data
-                master_index = episode_url_to_master_index[episode_url]
+                master_index = master_episode_lookup[identifier]
                 existing_master_entry = master_episode_list[master_index]
 
                 # Prioritize existing Airtable data for most fields, but update if new data is better/missing
@@ -382,6 +391,12 @@ def _process_single_podcast(podcast_record: Dict[str, Any], stop_flag: Optional[
                 if not existing_master_entry.get("episode_id") and new_episode.get("episode_id"):
                     existing_master_entry["episode_id"] = new_episode["episode_id"]
                 
+                # IMPORTANT: Update episode_audio_url if the new one is different.
+                # This ensures the master entry has the latest URL for the logical episode.
+                if new_episode.get("episode_audio_url") and new_episode["episode_audio_url"] != existing_master_entry.get("episode_audio_url"):
+                    existing_master_entry["episode_audio_url"] = new_episode["episode_audio_url"]
+                    logger.debug(f"Updated audio URL for '{new_episode.get('episode_title')}' to '{new_episode['episode_audio_url']}'.")
+
                 # Always update posted_at if the new one is more precise or different
                 if new_episode.get("posted_at") and (not existing_master_entry.get("posted_at") or new_episode["posted_at"] != existing_master_entry["posted_at"]):
                     existing_master_entry["posted_at"] = new_episode["posted_at"]
@@ -396,7 +411,7 @@ def _process_single_podcast(podcast_record: Dict[str, Any], stop_flag: Optional[
                 new_episode["was_fetched_externally"] = True
                 new_episode["was_fetched_from_podscan"] = fetched_from_podscan
                 master_episode_list.append(new_episode)
-                episode_url_to_master_index[episode_url] = len(master_episode_list) - 1
+                master_episode_lookup[identifier] = len(master_episode_list) - 1
 
         # Sort the master list by date (newest first)
         master_episode_list.sort(key=lambda x: x.get("posted_at") or datetime.min, reverse=True)
@@ -424,10 +439,20 @@ def _process_single_podcast(podcast_record: Dict[str, Any], stop_flag: Optional[
         episodes_to_update_payloads = []
 
         # Identify episodes to delete (existing in Airtable but not in final_episodes_to_manage)
-        final_episode_urls_to_keep = {ep.get("episode_audio_url") for ep in final_episodes_to_manage if ep.get("episode_audio_url")}
-        for rec_url, rec_data in existing_episode_map.items():
-            if rec_url not in final_episode_urls_to_keep:
-                episodes_to_delete_ids.append(rec_data['id'])
+        # Create a set of identifiers for the episodes we want to keep
+        final_episode_identifiers_to_keep = {get_episode_identifier(ep) for ep in final_episodes_to_manage if get_episode_identifier(ep)}
+        
+        # Iterate through all episodes currently in Airtable
+        for rec_id, rec_data in existing_airtable_records_by_id.items():
+            # Get the identifier for the existing Airtable record
+            existing_identifier = get_episode_identifier({
+                "episode_id": rec_data['fields'].get('Episode ID'),
+                "episode_audio_url": rec_data['fields'].get('Episode URL')
+            })
+            
+            # If the existing episode's identifier is NOT in our list of episodes to keep, mark it for deletion
+            if existing_identifier and existing_identifier not in final_episode_identifiers_to_keep:
+                episodes_to_delete_ids.append(rec_id)
         
         if episodes_to_delete_ids:
             logger.info(f"Marked {len(episodes_to_delete_ids)} episodes for deletion for '{podcast_name}'.")
@@ -451,8 +476,8 @@ def _process_single_podcast(podcast_record: Dict[str, Any], stop_flag: Optional[
             # Determine 'Downloaded' and 'Transcribe' status based on the merged data
             has_transcript_in_master = bool(episode.get("episode_transcript"))
             
-            # Downloaded is True if it came from Podscan AND has a transcript (either new or existing)
-            downloaded = episode.get("was_fetched_from_podscan", False) and has_transcript_in_master
+            # Downloaded is True if there's ANY transcript in the master entry
+            downloaded = has_transcript_in_master 
             
             transcribe = False # Start with False for Transcribe, then set based on conditions
             
@@ -469,7 +494,7 @@ def _process_single_podcast(podcast_record: Dict[str, Any], stop_flag: Optional[
                 "Episode Title": episode.get('episode_title', 'No Title'),
                 "Summary": episode.get('episode_description'),
                 "Episode ID": episode.get("episode_id"),
-                "Episode URL": episode_url,
+                "Episode URL": episode_url, # This will be the latest URL from the merged data
                 "Episode Web Link": episode.get("episode_url"),
                 "Published": dt_published.strftime('%Y-%m-%d') if dt_published else None,
                 "Podcast": [record_id],
@@ -483,15 +508,14 @@ def _process_single_podcast(podcast_record: Dict[str, Any], stop_flag: Optional[
                 field_to_update["Transcription"] = episode["episode_transcript"]
             else:
                 # If no transcript in master entry, explicitly clear it in Airtable
-                # This handles cases where a transcript was manually added but then removed from source,
-                # or if we switch from Podscan to RSS and the transcript is no longer available.
                 field_to_update["Transcription"] = None 
 
             # Check if episode already exists in Airtable (using the airtable_record_id stored in master_episode_list)
             existing_airtable_record_id = episode.get("airtable_record_id")
             if existing_airtable_record_id:
                 # This episode already exists in Airtable, prepare for update
-                current_fields = existing_episode_map.get(episode_url, {}).get('fields', {}) # Get original fields for comparison
+                # Get the original fields from Airtable for comparison
+                current_fields = existing_airtable_records_by_id.get(existing_airtable_record_id, {}).get('fields', {}) 
                 update_data = {}
                 needs_update = False
 
@@ -505,7 +529,9 @@ def _process_single_podcast(podcast_record: Dict[str, Any], stop_flag: Optional[
                             update_data[key] = value
                     elif key == "Podcast":
                         # Compare list of record IDs (Airtable stores linked records as a list of IDs)
-                        if current_value != value: # This will compare lists directly
+                        # Ensure current_value is also a list for comparison
+                        current_value_list = current_value if isinstance(current_value, list) else [current_value] if current_value else []
+                        if current_value_list != value: 
                             needs_update = True
                             update_data[key] = value
                     elif key == "Transcription":

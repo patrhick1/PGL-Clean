@@ -12,6 +12,7 @@ from typing import Optional, Dict, Any
 from datetime import datetime
 from contextlib import asynccontextmanager
 import sys
+import threading
 
 # Add the project root directory to sys.path to allow importing 'src'
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -43,6 +44,9 @@ from instantly_response import update_correspondent_on_airtable
 from fetch_episodes import get_podcast_episodes
 from podcast_note_transcriber import get_podcast_audio_transcription, transcribe_endpoint
 from free_tier_episode_transcriber import get_podcast_audio_transcription_free_tier, transcribe_endpoint_free_tier
+
+# NEW IMPORT: Import the batch podcast fetcher function
+from batch_podcast_fetcher import process_campaign_keywords # NEW IMPORT
 
 # Import the AI usage tracker
 from ai_usage_tracker import tracker as ai_tracker
@@ -352,7 +356,6 @@ def trigger_automation(
     try:
         task_id = str(uuid.uuid4())
         task_manager.start_task(task_id, action)
-        import threading
         def run_task():
             try:
                 stop_flag = task_manager.get_stop_flag(task_id)
@@ -388,6 +391,17 @@ def trigger_automation(
                 elif action == 'update_all_client_spreadsheets': # NEW: Add action for full sheet refresh
                     campaign_tracker_instance = CampaignStatusTracker() # Create new instance for background task
                     campaign_tracker_instance.update_all_client_spreadsheets()
+                # NEW ACTION: Trigger batch podcast fetching for a campaign
+                elif action == 'batch_podcast_fetch':
+                    if not id:
+                        raise ValueError("Missing 'id' parameter for Batch Podcast Fetch automation (Airtable Campaign Record ID)!")
+                    logger.info(f"Starting batch podcast fetch for campaign record ID: {id}")
+                    # Run the batch process in a separate thread
+                    threading.Thread(
+                        target=process_campaign_keywords,
+                        args=(id, stop_flag)
+                    ).start()
+                    return {"message": f"Batch podcast fetch started for Campaign ID '{id}'.", "task_id": task_id, "status": "running"}
                 else:
                     raise ValueError(f"Invalid action: {action}")
             except Exception as e:

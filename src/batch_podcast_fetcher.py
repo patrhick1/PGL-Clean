@@ -246,7 +246,8 @@ def process_campaign_keywords(campaign_record_id: str, stop_flag: Optional[threa
                             campaign_record_id,
                             campaign_name,
                             airtable_service,
-                            podscan_podcast_id=podscan_podcast_id # Pass Podscan ID
+                            podscan_podcast_id=podscan_podcast_id,
+                            stop_flag=stop_flag
                         )
                         page_processed_count += 1
                     except Exception as e:

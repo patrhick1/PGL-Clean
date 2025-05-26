@@ -157,6 +157,18 @@
                     Transcribe All Pending Episodes (Free Tier)
                 </button>
             </div>
+
+            <!-- NEW BUTTON ROW: Batch Podcast Fetcher -->
+            <div class="button-row">
+                <div class="input-field">
+                    <label for="campaign-record-id"><i class="fas fa-id-badge"></i> Campaign Record ID</label>
+                    <input type="text" id="campaign-record-id" placeholder="Enter Airtable Campaign Record ID">
+                </div>
+                <button class="automation-button" onclick="triggerBatchPodcastFetch()">
+                    <i class="fas fa-rocket"></i>
+                    Run Batch Podcast Fetcher
+                </button>
+            </div>
         </section>
         
         <!-- Task Management Section -->
