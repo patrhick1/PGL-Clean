@@ -1,10 +1,10 @@
-# main_fastapi.py
+# main.py (now in the root directory)
 
 import os
 import logging
 import uuid
 import json
-from fastapi import FastAPI, Request, Query, Response, status, Form, Depends, HTTPException, BackgroundTasks # Added BackgroundTasks
+from fastapi import FastAPI, Request, Query, Response, status, Form, Depends, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -14,14 +14,19 @@ from contextlib import asynccontextmanager
 import sys
 import threading
 
-# Add the project root directory to sys.path to allow importing 'src'
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(current_dir) # Go up one level from 'src'
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
+# NEW: APScheduler imports for scheduling
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+import pytz # For timezone-aware scheduling
+from dotenv import load_dotenv # Ensure dotenv is loaded here as well
 
-# Import the authentication middleware
-from auth_middleware import (
+# Load environment variables from .env file (important for scheduler config)
+load_dotenv()
+
+# Removed: sys.path manipulation - no longer needed if main.py is in root
+
+# Import the authentication middleware (now from src)
+from src.auth_middleware import (
     AuthMiddleware,
     authenticate_user,
     create_session,
@@ -29,33 +34,33 @@ from auth_middleware import (
     get_admin_user
 )
 
-# Import the task manager
-from task_manager import task_manager
+# Import the task manager (now from src)
+from src.task_manager import task_manager
 
-# Import the functions that handle specific tasks
-from webhook_handler import poll_airtable_and_process, poll_podcast_search_database, enrich_host_name
-from summary_guest_identification_optimized import PodcastProcessor
-from determine_fit_optimized import determine_fit
-from pitch_episode_selection_optimized import pitch_episode_selection
-from pitch_writer_optimized import pitch_writer
-from send_pitch_to_instantly import send_pitch_to_instantly
-from instantly_email_sent import update_airtable_when_email_sent
-from instantly_response import update_correspondent_on_airtable
-from fetch_episodes import get_podcast_episodes
-from podcast_note_transcriber import get_podcast_audio_transcription, transcribe_endpoint
-from free_tier_episode_transcriber import get_podcast_audio_transcription_free_tier, transcribe_endpoint_free_tier
+# Import the functions that handle specific tasks (now from src)
+from src.webhook_handler import poll_airtable_and_process, poll_podcast_search_database, enrich_host_name
+from src.summary_guest_identification_optimized import PodcastProcessor
+from src.determine_fit_optimized import determine_fit
+from src.pitch_episode_selection_optimized import pitch_episode_selection
+from src.pitch_writer_optimized import pitch_writer
+from src.send_pitch_to_instantly import send_pitch_to_instantly
+from src.instantly_email_sent import update_airtable_when_email_sent
+from src.instantly_response import update_correspondent_on_airtable
+from src.fetch_episodes import get_podcast_episodes
+from src.podcast_note_transcriber import get_podcast_audio_transcription, transcribe_endpoint
+from src.free_tier_episode_transcriber import get_podcast_audio_transcription_free_tier, transcribe_endpoint_free_tier
 
-# NEW IMPORT: Import the batch podcast fetcher function
-from batch_podcast_fetcher import process_campaign_keywords # NEW IMPORT
+# NEW IMPORT: Import the batch podcast fetcher function (now from src)
+from src.batch_podcast_fetcher import process_campaign_keywords
 
-# Import the AI usage tracker
-from ai_usage_tracker import tracker as ai_tracker
+# Import the AI usage tracker (now from src)
+from src.ai_usage_tracker import tracker as ai_tracker
 
-# Import your Airtable service classes
-from airtable_service import PodcastService, MIPRService
+# Import your Airtable service classes (now from src)
+from src.airtable_service import PodcastService, MIPRService
 
-# Import the database utility functions
-from db_utils import (
+# Import the database utility functions (now from src)
+from src.db_utils import (
     create_history_table,
     get_last_known_value,
     insert_status_history,
@@ -63,8 +68,8 @@ from db_utils import (
     HISTORY_TABLE_NAME
 )
 
-# Import the CampaignStatusTracker
-from campaign_status_tracker import CampaignStatusTracker # NEW IMPORT
+# Import the CampaignStatusTracker (now from src)
+from src.campaign_status_tracker import CampaignStatusTracker
 
 # -------------------------------------------------------------------
 # Configure logging
@@ -79,8 +84,9 @@ ENABLE_LLM_TEST_DASHBOARD = os.getenv("ENABLE_LLM_TEST_DASHBOARD", "false").lowe
 
 if ENABLE_LLM_TEST_DASHBOARD:
     logger.info("ENABLE_LLM_TEST_DASHBOARD is true. Attempting to load test runner routes.")
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    tests_dir = os.path.join(project_root, "tests")
+    # Adjust path for test_runner if it's not directly in root/tests
+    # Assuming tests/test_runner.py is at the same level as src/
+    tests_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tests")
 
     if not os.path.isdir(tests_dir):
         logger.warning(f"Tests directory not found at {tests_dir}. Cannot load LLM Test Dashboard.")
@@ -88,8 +94,7 @@ if ENABLE_LLM_TEST_DASHBOARD:
         original_sys_path = list(sys.path)
         if tests_dir not in sys.path:
             sys.path.insert(0, tests_dir)
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
+        # No need to insert project_root if main.py is already in root
 
         try:
             from test_runner import register_routes as register_test_routes # type: ignore
@@ -106,6 +111,24 @@ else:
     logger.info("ENABLE_LLM_TEST_DASHBOARD is false. LLM Test Dashboard routes will not be loaded.")
     register_test_routes = None
 
+# NEW: Initialize APScheduler
+app_timezone = os.getenv('APP_TIMEZONE')
+if not app_timezone or '#' in app_timezone: # Basic check for comments or empty string
+    logger.info(f"APP_TIMEZONE environment variable not set or invalid ('{app_timezone}'), defaulting to UTC for APScheduler.")
+    app_timezone = 'UTC'
+else:
+    logger.info(f"Using APP_TIMEZONE: {app_timezone} for APScheduler.")
+
+try:
+    scheduler = BackgroundScheduler(timezone=app_timezone)
+except Exception as e:
+    logger.warning(f"Failed to initialize APScheduler with timezone '{app_timezone}': {e}. Defaulting to UTC.")
+    scheduler = BackgroundScheduler(timezone='UTC')
+
+# NEW: Initialize CampaignStatusTracker globally for the scheduler
+# This instance will be used by the scheduled job
+tracker_for_scheduler = CampaignStatusTracker()
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup logic
@@ -115,9 +138,6 @@ async def lifespan(app: FastAPI):
     logger.info("Attempting to create history table...")
     if not create_history_table():
         logger.error("Failed to create history table on startup. Database logging might fail.")
-        # Depending on criticality, you might want to raise an exception here
-        # to prevent the app from starting if DB is essential.
-        # raise RuntimeError("Database table creation failed.")
     else:
         logger.info("History table check/creation complete.")
     # --- End Database Table Creation ---
@@ -130,6 +150,23 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"Error registering LLM Test Dashboard routes: {e}")
 
+    # NEW: Schedule the daily report job
+    schedule_hour = int(os.getenv('REPORT_SCHEDULE_HOUR', 17)) # Default 5 PM
+    schedule_minute = int(os.getenv('REPORT_SCHEDULE_MINUTE', 0)) # Default 0 minutes
+
+    scheduler.add_job(
+        run_daily_report_job, # The function to run
+        CronTrigger(hour=schedule_hour, minute=schedule_minute),
+        id='daily_campaign_report',
+        name='Daily Campaign Status Report',
+        replace_existing=True
+    )
+    logger.info(f"Scheduled daily campaign report to run at {schedule_hour:02d}:{schedule_minute:02d} {scheduler.timezone}.")
+    
+    # Start the scheduler
+    scheduler.start()
+    logger.info("APScheduler started.")
+
     yield
 
     # Shutdown logic
@@ -137,6 +174,9 @@ async def lifespan(app: FastAPI):
         logger.info("Application shutting down, cleaning up resources...")
         if hasattr(task_manager, 'cleanup'):
             task_manager.cleanup()
+        # NEW: Shut down the scheduler gracefully
+        scheduler.shutdown()
+        logger.info("APScheduler shut down.")
         import asyncio
         await asyncio.sleep(0.5)
         logger.info("Cleanup completed")
@@ -145,7 +185,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(AuthMiddleware)
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory="templates") # Assumes 'templates' is in the root
 
 def format_number(value):
     return f"{value:,}"
@@ -157,7 +197,7 @@ def format_datetime(timestamp):
 templates.env.filters["format_number"] = format_number
 templates.env.filters["format_datetime"] = format_datetime
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory="static"), name="static") # Assumes 'static' is in the root
 
 # --- Dependency for Airtable Service ---
 def get_podcast_service() -> PodcastService:
@@ -168,6 +208,7 @@ def get_podcast_service() -> PodcastService:
         raise HTTPException(status_code=500, detail="Internal server error: Airtable service not available.")
 
 # --- Dependency for CampaignStatusTracker ---
+# This instance is for webhook/manual triggers, not the scheduled job
 def get_campaign_status_tracker() -> CampaignStatusTracker:
     try:
         return CampaignStatusTracker()
@@ -175,6 +216,16 @@ def get_campaign_status_tracker() -> CampaignStatusTracker:
         logger.critical(f"Failed to initialize CampaignStatusTracker: {e}")
         raise HTTPException(status_code=500, detail="Internal server error: Campaign status tracker not available.")
 
+# NEW: Function to be scheduled by APScheduler
+def run_daily_report_job():
+    """Function to be scheduled by APScheduler."""
+    logger.info("Scheduler triggered: Running daily campaign status report.")
+    try:
+        # Use the globally initialized tracker instance
+        tracker_for_scheduler.update_all_client_spreadsheets()
+        logger.info("Daily campaign status report job completed.")
+    except Exception as e:
+        logger.error(f"Error during daily campaign status report job: {e}", exc_info=True)
 
 @app.get("/login")
 def login_page(request: Request):
@@ -237,9 +288,9 @@ def api_status():
 @app.post("/webhook/airtable-status-change")
 async def handle_airtable_status_webhook(
     request: Request,
-    background_tasks: BackgroundTasks, # NEW: Added BackgroundTasks
+    background_tasks: BackgroundTasks,
     podcast_service: PodcastService = Depends(get_podcast_service),
-    campaign_tracker: CampaignStatusTracker = Depends(get_campaign_status_tracker) # NEW: Added CampaignStatusTracker
+    campaign_tracker: CampaignStatusTracker = Depends(get_campaign_status_tracker) # This is the instance for webhook
 ):
     """
     Receives and processes Airtable webhook payloads for status changes in Campaign Manager.
@@ -321,13 +372,12 @@ async def handle_airtable_status_webhook(
                         source_system='Airtable Webhook'
                     )
 
-                    # --- NEW: Trigger Google Sheet Update in Background ---
+                    # Trigger Google Sheet Update in Background for the specific client
                     if client_name:
                         logger.info(f"Adding background task to update Google Sheet for client: {client_name}")
                         background_tasks.add_task(campaign_tracker.update_single_client_spreadsheet, client_name)
                     else:
                         logger.warning(f"Client name not found for record {record_id}. Cannot update client spreadsheet.")
-                    # --- END NEW ---
 
                 else:
                     logger.info(f"No actual status change detected for record {record_id} ('{current_status}' == '{old_status}'). Not logging or updating sheet.")
@@ -389,7 +439,8 @@ def trigger_automation(
                 elif action == 'transcribe_podcast_free_tier':
                     run_transcription_task_free_tier(stop_flag)
                 elif action == 'update_all_client_spreadsheets': # NEW: Add action for full sheet refresh
-                    campaign_tracker_instance = CampaignStatusTracker() # Create new instance for background task
+                    # For manual trigger, create a new instance as it runs in a separate thread
+                    campaign_tracker_instance = CampaignStatusTracker()
                     campaign_tracker_instance.update_all_client_spreadsheets()
                 # NEW ACTION: Trigger batch podcast fetching for a campaign
                 elif action == 'batch_podcast_fetch':
@@ -422,6 +473,28 @@ def trigger_automation(
         return Response(
             content=f"Error triggering automation for action '{action}': {str(e)}",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@app.post("/trigger-daily-report")
+async def trigger_daily_report_manually(
+    # CORRECTED: BackgroundTasks should be injected as a dependency
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(get_admin_user)
+):
+    """
+    Endpoint to manually trigger the daily campaign status report.
+    This runs the report in a background task to avoid blocking the API response.
+    Requires admin privileges.
+    """
+    logger.info(f"Manual trigger for daily campaign status report received by user: {user['username']}.")
+    try:
+        # Add the job to background tasks. FastAPI will manage its execution
+        # without blocking the HTTP response.
+        background_tasks.add_task(run_daily_report_job)
+        return {"message": "Daily campaign status report triggered successfully. It is running in the background.", "status": "processing"}
+    except Exception as e:
+        logger.error(f"Error triggering manual daily report: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to trigger report: {e}")
+
 
 @app.post("/stop_task/{task_id}")
 def stop_task(task_id: str, user: dict = Depends(get_current_user)):
@@ -474,7 +547,7 @@ def run_transcription_task(stop_flag):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
-        loop.run_until_complete(get_podcast_audio_transcription(stop_flag))
+        loop.run_until_complete(transcribe_endpoint(None, None, stop_flag)) # Assuming transcribe_endpoint can take None for full batch
     except Exception as e:
         logger.error(f"Error in podcast transcription task: {e}")
     finally:
@@ -485,7 +558,7 @@ def run_transcription_task_free_tier(stop_flag):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
-        loop.run_until_complete(get_podcast_audio_transcription_free_tier(stop_flag))
+        loop.run_until_complete(transcribe_endpoint_free_tier(None, None, stop_flag)) # Assuming transcribe_endpoint_free_tier can take None for full batch
     except Exception as e:
         logger.error(f"Error in podcast transcription task: {e}")
     finally:
@@ -493,7 +566,7 @@ def run_transcription_task_free_tier(stop_flag):
 
 def run_summary_host_guest_optimized(stop_flag):
     import asyncio
-    from summary_guest_identification_optimized import PodcastProcessor
+    from src.summary_guest_identification_optimized import PodcastProcessor # Updated import
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
@@ -519,17 +592,16 @@ def get_ai_usage(
     user: dict = Depends(get_admin_user)
 ):
     try:
+        from src.generate_ai_usage_report import format_as_text, format_as_csv # Moved import inside function
         report = ai_tracker.generate_report(
             start_date=start_date,
             end_date=end_date,
             group_by=group_by
         )
         if format.lower() == 'text':
-            from generate_ai_usage_report import format_as_text
             content = format_as_text(report)
             return Response(content=content, media_type="text/plain")
         elif format.lower() == 'csv':
-            from generate_ai_usage_report import format_as_csv
             content = format_as_csv(report)
             return Response(content=content, media_type="text/csv",
                           headers={"Content-Disposition": "attachment; filename=ai_usage_report.csv"})
@@ -652,7 +724,7 @@ async def webhook_replyreceived(request: Request):
 @app.get("/transcribe-podcast/{podcast_id}")
 async def transcribe_specific_podcast(podcast_id: str, user: dict = Depends(get_admin_user)):
     try:
-        from airtable_service import PodcastService
+        from src.airtable_service import PodcastService # Updated import
         airtable = PodcastService()
         record = airtable.get_record("Podcast_Episodes", podcast_id)
         if not record:
@@ -691,10 +763,12 @@ def run_specific_transcription(podcast_id, audio_url, episode_name):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
+        # Assuming transcribe_endpoint_free_tier is imported from src.free_tier_episode_transcriber
+        from src.free_tier_episode_transcriber import transcribe_endpoint_free_tier
         transcript_result = loop.run_until_complete(
             transcribe_endpoint_free_tier(audio_url, episode_name)
         )
-        from airtable_service import PodcastService
+        from src.airtable_service import PodcastService # Updated import
         airtable = PodcastService()
         airtable.update_record(
             "Podcast_Episodes",
@@ -747,4 +821,5 @@ if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
     logger.info(f"Starting FastAPI app on port {port}.")
-    uvicorn.run("src.main_fastapi:app", host='0.0.0.0', port=port, reload=True)
+    # Changed from "src.main_fastapi:app" to "main:app"
+    uvicorn.run("main:app", host='0.0.0.0', port=port, reload=True)

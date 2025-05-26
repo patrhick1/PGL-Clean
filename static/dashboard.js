@@ -282,4 +282,29 @@ function transcribePodcast() {
             }
             alert("Error starting transcription: " + error.message);
         });
+}
+
+// NEW FUNCTION: Trigger Daily Campaign Report
+async function triggerDailyReport() {
+    // Confirm before triggering the report
+    if (!confirm("This will trigger the daily campaign status report. Continue?")) {
+        return;
+    }
+
+    try {
+        showStatusMessage('Triggering daily campaign report...', 'info');
+        
+        const response = await fetch('/trigger-daily-report', {
+            method: 'POST' // Assuming the endpoint is a POST request
+        });
+        const data = await response.json();
+        
+        if (response.ok) {
+            showStatusMessage(data.message || 'Daily report triggered successfully!', 'success');
+        } else {
+            showStatusMessage(`Error: ${data.detail || data.error || 'Unknown error'}`, 'error');
+        }
+    } catch (error) {
+        showStatusMessage(`Error: ${error.message}`, 'error');
+    }
 } 

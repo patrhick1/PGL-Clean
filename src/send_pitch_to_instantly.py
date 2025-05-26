@@ -1,7 +1,7 @@
 # app/send_pitch.py
 
-from airtable_service import PodcastService
-from external_api_service import InstantlyAPI
+from .airtable_service import PodcastService
+from .external_api_service import InstantlyAPI
 from dotenv import load_dotenv
 import os
 import json

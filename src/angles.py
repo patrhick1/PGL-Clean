@@ -28,12 +28,12 @@ from langchain.schema import HumanMessage
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.text_splitter import SentenceTransformersTokenTextSplitter
 
-from airtable_service import MIPRService
-from google_docs_service import GoogleDocsService
-from openai_service import OpenAIService
+from .airtable_service import MIPRService
+from .google_docs_service import GoogleDocsService
+from .openai_service import OpenAIService
 # Remove GeminiService import and use LangChain instead
-from data_processor import extract_document_id
-from ai_usage_tracker import tracker as ai_tracker
+from .data_processor import extract_document_id
+from .ai_usage_tracker import tracker as ai_tracker
 
 # Enhanced logging for troubleshooting
 logging.basicConfig(

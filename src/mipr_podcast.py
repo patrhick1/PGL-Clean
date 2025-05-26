@@ -1,10 +1,10 @@
 import logging
-from airtable_service import PodcastService
-from openai_service import OpenAIService
-from external_api_service import ListenNote, PodscanFM
-from data_processor import DataProcessor, parse_date
+from .airtable_service import PodcastService
+from .openai_service import OpenAIService
+from .external_api_service import ListenNote, PodscanFM
+from .data_processor import DataProcessor, parse_date
 from datetime import datetime, timedelta
-from file_manipulation import read_txt_file
+from .file_manipulation import read_txt_file
 import threading
 from typing import Optional
 import time

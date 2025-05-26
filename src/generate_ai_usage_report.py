@@ -24,7 +24,7 @@ from tabulate import tabulate
 from typing import Optional, Dict, Any, List
 
 # Import the tracker
-from ai_usage_tracker import tracker
+from .ai_usage_tracker import tracker
 
 
 def parse_arguments():

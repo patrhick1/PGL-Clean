@@ -1,6 +1,6 @@
 # app/instantly_response.py
 
-from airtable_service import PodcastService
+from .airtable_service import PodcastService
 
 def update_correspondent_on_airtable(data):
     """

@@ -14,8 +14,8 @@ import logging
 from pyairtable import Api
 from dotenv import load_dotenv
 from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from airtable_service import PodcastService # Avoid circular import for runtime
+# if TYPE_CHECKING: # Removed potentially problematic self-referential import
+    # from .airtable_service import PodcastService 
 
 # Load .env variables to access your Airtable credentials
 load_dotenv()
@@ -639,86 +639,12 @@ if __name__ == "__main__":
     
     production_service = PodcastService()
 
-    # --- Test the specific client name search formula ---
-    logger.info("--- Testing Client Name Search Formula ---")
-    
-    # Define the client name to test with
-    test_client_name = "Ashwin Ramesh"  # Replace with a known client name if different
-    
-    # Define the field name in Airtable that stores the client's name (as used in Campaign Manager)
-    # This usually comes from a lookup or linked record.
-    # As per campaign_status_tracker.py, it's "Client Name"
-    airtable_cm_client_name_field = "Client Name" 
-    
-    # Construct the search formula
-    # Escaping quotes within the client_name just in case, though usually not needed for typical names.
-    escaped_client_name = test_client_name.replace('"', '\\"')
-    search_formula = f"FIND(\"{escaped_client_name}\", ARRAYJOIN({{{airtable_cm_client_name_field}}})) > 0"
-    
-    logger.info(f"Searching 'Campaign Manager' for client '{test_client_name}' using formula: {search_formula}")
-    
-    try:
-        client_specific_records = production_service.search_records(
-            table_name='Campaign Manager',
-            formula=search_formula
-        )
-        
-        if client_specific_records:
-            logger.info(f"Found {len(client_specific_records)} records for client '{test_client_name}'.")
-            logger.info("First few records (or all if fewer than 5):")
-            for i, record in enumerate(client_specific_records[:5]):
-                # Try to display the 'Client Name' field from the record to verify
-                client_name_from_record = record.get('fields', {}).get(airtable_cm_client_name_field, "Not Found")
-                campaign_name_from_record = record.get('fields', {}).get("CampaignName", "Not Found")
-                status_from_record = record.get('fields', {}).get("Status", "Not Found")
-                logger.info(f"  Record ID: {record.get('id')}, Client Name Field: {client_name_from_record}, Campaign: {campaign_name_from_record}, Status: {status_from_record}")
-        else:
-            logger.info(f"No records found for client '{test_client_name}' using the formula.")
-            
-    except Exception as e:
-        logger.error(f"Error during test search for client '{test_client_name}': {e}", exc_info=True)
-        
-    logger.info("--- Finished Testing Client Name Search Formula ---")
+    # --- Test delete_excess_podcast_episodes function ---
+    logger.info("--- Testing Deletion of Excess Podcast Episodes ---")
+    deleted_count, error_count = delete_excess_podcast_episodes(production_service, keep_count=10, batch_size=10)
+    logger.info(f"Call to delete_excess_podcast_episodes completed.")
+    logger.info(f"Successfully deleted: {deleted_count} episodes.")
+    logger.info(f"Errors encountered: {error_count}.")
+    logger.info("--- Finished Testing Deletion of Excess Podcast Episodes ---")
 
-    # --- Test Fetching Episodes by Podcast ID --- # NEW TEST
-    logger.info("--- Testing Fetching Episodes by Podcast ID ---")
-    
-    podcast_name = "Convergence"
-    episodes_table_name = "Podcast_Episodes"
-    podcast_link_field_name = "Podcast"
-    
-    # Construct the search formula using FIND and ARRAYJOIN for the linked record field
-    episode_search_formula = f'{{{podcast_link_field_name}}} = "{podcast_name}"'
-    
-    logger.info(f"Searching '{episodes_table_name}' for podcast ID '{podcast_name}' using formula: {episode_search_formula}")
-    
-    try:
-        linked_episodes = production_service.search_records(
-            table_name=episodes_table_name,
-            formula=episode_search_formula
-        )
-        
-        if linked_episodes:
-            logger.info(f"Found {len(linked_episodes)} episodes linked to podcast ID '{podcast_name}'.")
-            logger.info("First few linked episodes (or all if fewer than 5):")
-            for i, record in enumerate(linked_episodes[:5]):
-                episode_title = record.get('fields', {}).get('Episode Title', 'No Title')
-                episode_url = record.get('fields', {}).get('Episode URL', 'No URL')
-                logger.info(f"  - Record ID: {record.get('id')}, Title: {episode_title}, URL: {episode_url}")
-        else:
-            logger.info(f"No episodes found linked to podcast ID '{podcast_name}' using the formula.")
-            
-    except Exception as e:
-        logger.error(f"Error during test search for episodes linked to podcast ID '{podcast_name}': {e}", exc_info=True)
-        
-    logger.info("--- Finished Testing Fetching Episodes by Podcast ID ---")
-
-    # You can keep or remove the older test below
-    # logger.info("--- Original Test: Fetching first 2 CM records ---")
-    # cm_records = production_service.search_records('Campaign Manager')
-    # for record in cm_records[:2]:
-    #     print(record)
-    # logger.info("--- Finished Original Test ---")
-
-
-
+ 

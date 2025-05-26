@@ -28,11 +28,11 @@ except ImportError:
     REPLIT_DB_AVAILABLE = False
     logging.warning("Replit DB not available, falling back to file storage")
 
-from airtable_service import MIPRService, PodcastService
-from openai_service import OpenAIService
-from mipr_podcast import process_mipr_podcast_search_listennotes, process_mipr_podcast_search_with_podscan
-from angles import filter_by_transcription_availability
-from gemini_search import query_gemini_with_grounding
+from .airtable_service import MIPRService, PodcastService
+from .openai_service import OpenAIService
+from .mipr_podcast import process_mipr_podcast_search_listennotes, process_mipr_podcast_search_with_podscan
+from .angles import filter_by_transcription_availability
+from .gemini_search import query_gemini_with_grounding
 
 # Configure a logger for this module
 logger = logging.getLogger(__name__)
