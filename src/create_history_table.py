@@ -8,7 +8,7 @@ import logging
 from datetime import datetime
 
 # Import your Airtable service classes
-from airtable_service import PodcastService, MIPRService
+from .airtable_service import PodcastService, MIPRService
 
 # Load environment variables
 load_dotenv()

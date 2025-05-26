@@ -1,4 +1,4 @@
-from airtable_service import PodcastService
+from .airtable_service import PodcastService
 import pandas as pd
 
 

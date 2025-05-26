@@ -38,8 +38,8 @@ from langchain.output_parsers.pydantic import PydanticOutputParser
 from langchain.prompts import PromptTemplate
 
 # Assuming these modules exist and are correctly set up
-from airtable_service import PodcastService
-from ai_usage_tracker import tracker as ai_tracker
+from .airtable_service import PodcastService
+from .ai_usage_tracker import tracker as ai_tracker
 
 
 # Add tiktoken for OpenAI token counting

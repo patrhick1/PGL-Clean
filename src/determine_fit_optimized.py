@@ -23,10 +23,10 @@ from datetime import datetime, timedelta, timezone
 
 # Environment and service imports
 from dotenv import load_dotenv
-from airtable_service import PodcastService
-from google_docs_service import GoogleDocsService
-from data_processor import generate_prompt
-from ai_usage_tracker import tracker as ai_tracker
+from .airtable_service import PodcastService
+from .google_docs_service import GoogleDocsService
+from .data_processor import generate_prompt
+from .ai_usage_tracker import tracker as ai_tracker
 
 # LangChain components
 from langchain_anthropic import ChatAnthropic

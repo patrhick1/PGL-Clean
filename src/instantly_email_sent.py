@@ -1,6 +1,6 @@
 # app/instantly_email_sent.py
 
-from airtable_service import PodcastService
+from .airtable_service import PodcastService
 from datetime import datetime
 
 def update_airtable_when_email_sent(data):

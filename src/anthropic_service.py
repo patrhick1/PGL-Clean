@@ -8,7 +8,7 @@ import logging
 from typing import Optional
 
 # Import our AI usage tracker
-from ai_usage_tracker import tracker as ai_tracker
+from .ai_usage_tracker import tracker as ai_tracker
 
 #Load environment variables
 load_dotenv()

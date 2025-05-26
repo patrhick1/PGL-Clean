@@ -29,8 +29,8 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 # Airtable service
-from airtable_service import PodcastService
-from google_docs_service import GoogleDocsService
+from .airtable_service import PodcastService
+from .google_docs_service import GoogleDocsService
 
 # LangChain imports
 from langchain_anthropic import ChatAnthropic
@@ -40,7 +40,7 @@ from langchain_core.prompts import PromptTemplate
 import anthropic
 
 # AI usage tracker
-from ai_usage_tracker import tracker as ai_tracker
+from .ai_usage_tracker import tracker as ai_tracker
 
 # Configure logging
 logging.basicConfig(level=logging.INFO,

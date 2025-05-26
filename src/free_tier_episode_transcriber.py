@@ -12,7 +12,7 @@ import logging
 import concurrent.futures
 from functools import partial
 import tempfile
-from airtable_service import PodcastService
+from .airtable_service import PodcastService
 import asyncio
 
 # Configure logging

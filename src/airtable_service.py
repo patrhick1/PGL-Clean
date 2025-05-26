@@ -15,7 +15,7 @@ from pyairtable import Api
 from dotenv import load_dotenv
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from airtable_service import PodcastService # Avoid circular import for runtime
+    from .airtable_service import PodcastService # Avoid circular import for runtime
 
 # Load .env variables to access your Airtable credentials
 load_dotenv()

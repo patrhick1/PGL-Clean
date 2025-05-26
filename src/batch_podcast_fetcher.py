@@ -6,12 +6,12 @@ import argparse
 from typing import Optional
 
 # Assuming these modules are in the same directory or accessible via PYTHONPATH
-from airtable_service import PodcastService
-from openai_service import OpenAIService
-from google_docs_service import GoogleDocsService
-from external_api_service import ListenNote, PodscanFM
-from data_processor import DataProcessor
-from mipr_podcast import generate_genre_ids # Re-use the genre ID generator
+from .airtable_service import PodcastService
+from .openai_service import OpenAIService
+from .google_docs_service import GoogleDocsService
+from .external_api_service import ListenNote, PodscanFM
+from .data_processor import DataProcessor
+from .mipr_podcast import generate_genre_ids # Re-use the genre ID generator
 
 # --- Configuration ---
 logging.basicConfig(level=logging.INFO,

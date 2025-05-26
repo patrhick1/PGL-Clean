@@ -19,9 +19,9 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
-from file_manipulation import read_txt_file
+from .file_manipulation import read_txt_file
 # Import our AI usage tracker
-from ai_usage_tracker import tracker as ai_tracker
+from .ai_usage_tracker import tracker as ai_tracker
 
 # Load .env variables to access your OpenAI API key
 load_dotenv()

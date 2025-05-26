@@ -1,6 +1,6 @@
 # src/attio_email_sent.py
 
-from src.attio_service import AttioClient
+from .attio_service import AttioClient
 from datetime import datetime
 import os
 

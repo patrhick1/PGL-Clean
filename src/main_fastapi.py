@@ -21,7 +21,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # Import the authentication middleware
-from auth_middleware import (
+from .auth_middleware import (
     AuthMiddleware,
     authenticate_user,
     create_session,
@@ -30,32 +30,32 @@ from auth_middleware import (
 )
 
 # Import the task manager
-from task_manager import task_manager
+from .task_manager import task_manager
 
 # Import the functions that handle specific tasks
-from webhook_handler import poll_airtable_and_process, poll_podcast_search_database, enrich_host_name
-from summary_guest_identification_optimized import PodcastProcessor
-from determine_fit_optimized import determine_fit
-from pitch_episode_selection_optimized import pitch_episode_selection
-from pitch_writer_optimized import pitch_writer
-from send_pitch_to_instantly import send_pitch_to_instantly
-from instantly_email_sent import update_airtable_when_email_sent
-from instantly_response import update_correspondent_on_airtable
-from fetch_episodes import get_podcast_episodes
-from podcast_note_transcriber import get_podcast_audio_transcription, transcribe_endpoint
-from free_tier_episode_transcriber import get_podcast_audio_transcription_free_tier, transcribe_endpoint_free_tier
+from .webhook_handler import poll_airtable_and_process, poll_podcast_search_database, enrich_host_name
+from .summary_guest_identification_optimized import PodcastProcessor
+from .determine_fit_optimized import determine_fit
+from .pitch_episode_selection_optimized import pitch_episode_selection
+from .pitch_writer_optimized import pitch_writer
+from .send_pitch_to_instantly import send_pitch_to_instantly
+from .instantly_email_sent import update_airtable_when_email_sent
+from .instantly_response import update_correspondent_on_airtable
+from .fetch_episodes import get_podcast_episodes
+from .podcast_note_transcriber import get_podcast_audio_transcription, transcribe_endpoint
+from .free_tier_episode_transcriber import get_podcast_audio_transcription_free_tier, transcribe_endpoint_free_tier
 
 # NEW IMPORT: Import the batch podcast fetcher function
-from batch_podcast_fetcher import process_campaign_keywords # NEW IMPORT
+from .batch_podcast_fetcher import process_campaign_keywords # NEW IMPORT
 
 # Import the AI usage tracker
-from ai_usage_tracker import tracker as ai_tracker
+from .ai_usage_tracker import tracker as ai_tracker
 
 # Import your Airtable service classes
-from airtable_service import PodcastService, MIPRService
+from .airtable_service import PodcastService, MIPRService
 
 # Import the database utility functions
-from db_utils import (
+from .db_utils import (
     create_history_table,
     get_last_known_value,
     insert_status_history,
@@ -64,7 +64,7 @@ from db_utils import (
 )
 
 # Import the CampaignStatusTracker
-from campaign_status_tracker import CampaignStatusTracker # NEW IMPORT
+from .campaign_status_tracker import CampaignStatusTracker # NEW IMPORT
 
 # -------------------------------------------------------------------
 # Configure logging
@@ -493,7 +493,7 @@ def run_transcription_task_free_tier(stop_flag):
 
 def run_summary_host_guest_optimized(stop_flag):
     import asyncio
-    from summary_guest_identification_optimized import PodcastProcessor
+    from .summary_guest_identification_optimized import PodcastProcessor
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
@@ -525,11 +525,11 @@ def get_ai_usage(
             group_by=group_by
         )
         if format.lower() == 'text':
-            from generate_ai_usage_report import format_as_text
+            from .generate_ai_usage_report import format_as_text
             content = format_as_text(report)
             return Response(content=content, media_type="text/plain")
         elif format.lower() == 'csv':
-            from generate_ai_usage_report import format_as_csv
+            from .generate_ai_usage_report import format_as_csv
             content = format_as_csv(report)
             return Response(content=content, media_type="text/csv",
                           headers={"Content-Disposition": "attachment; filename=ai_usage_report.csv"})
@@ -652,7 +652,7 @@ async def webhook_replyreceived(request: Request):
 @app.get("/transcribe-podcast/{podcast_id}")
 async def transcribe_specific_podcast(podcast_id: str, user: dict = Depends(get_admin_user)):
     try:
-        from airtable_service import PodcastService
+        from .airtable_service import PodcastService
         airtable = PodcastService()
         record = airtable.get_record("Podcast_Episodes", podcast_id)
         if not record:
@@ -694,7 +694,7 @@ def run_specific_transcription(podcast_id, audio_url, episode_name):
         transcript_result = loop.run_until_complete(
             transcribe_endpoint_free_tier(audio_url, episode_name)
         )
-        from airtable_service import PodcastService
+        from .airtable_service import PodcastService
         airtable = PodcastService()
         airtable.update_record(
             "Podcast_Episodes",

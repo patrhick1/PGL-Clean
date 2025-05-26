@@ -10,9 +10,9 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from dotenv import load_dotenv
 
-from airtable_service import PodcastService
-from google_sheets_service import GoogleSheetsService # Assuming this exists and works
-from db_utils import (
+from .airtable_service import PodcastService
+from .google_sheets_service import GoogleSheetsService # Assuming this exists and works
+from .db_utils import (
     create_history_table,
     get_last_known_value,
     insert_status_history,
