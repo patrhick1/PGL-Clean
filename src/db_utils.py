@@ -1,10 +1,11 @@
-# db_utils.py
+# db_utils.py (additions only)
 
 import os
 import psycopg2
 from psycopg2 import Error
 import logging
 from dotenv import load_dotenv
+from datetime import datetime # Added for type hinting and potential datetime object handling
 
 # Load environment variables (ensure this is called where needed, e.g., in main_fastapi.py)
 load_dotenv()
@@ -177,3 +178,67 @@ def field_value_to_string(value):
         # Join list elements into a comma-separated string
         return ", ".join(str(item) for item in value)
     return str(value)
+
+
+# --- NEW FUNCTIONS FOR REPORTING ---
+
+def get_client_status_history(client_name: str) -> list[dict]:
+    """
+    Retrieves all status history entries for a specific client from the PostgreSQL table.
+    """
+    conn = get_db_connection()
+    if conn is None:
+        return []
+
+    records = []
+    try:
+        cursor = conn.cursor()
+        select_sql = f"""
+        SELECT
+            id, airtable_record_id, airtable_table_name, airtable_base_id,
+            field_name, old_value, new_value, change_timestamp,
+            client_name, campaign_name, podcast_name, source_system
+        FROM {HISTORY_TABLE_NAME}
+        WHERE client_name = %s
+        ORDER BY change_timestamp ASC;
+        """
+        cursor.execute(select_sql, (client_name,))
+        columns = [desc[0] for desc in cursor.description]
+        for row in cursor.fetchall():
+            records.append(dict(zip(columns, row)))
+        logger.info(f"Retrieved {len(records)} history records for client '{client_name}'.")
+        return records
+    except Error as e:
+        logger.error(f"Error retrieving history for client '{client_name}': {e}")
+        return []
+    finally:
+        if conn:
+            conn.close()
+
+def get_all_client_names_from_history() -> list[str]:
+    """
+    Retrieves all unique client names from the airtable_status_history table.
+    """
+    conn = get_db_connection()
+    if conn is None:
+        return []
+
+    client_names = []
+    try:
+        cursor = conn.cursor()
+        select_sql = f"""
+        SELECT DISTINCT client_name
+        FROM {HISTORY_TABLE_NAME}
+        WHERE client_name IS NOT NULL AND client_name != '';
+        """
+        cursor.execute(select_sql)
+        for row in cursor.fetchall():
+            client_names.append(row[0])
+        logger.info(f"Retrieved {len(client_names)} unique client names from history.")
+        return client_names
+    except Error as e:
+        logger.error(f"Error retrieving unique client names from history: {e}")
+        return []
+    finally:
+        if conn:
+            conn.close()
