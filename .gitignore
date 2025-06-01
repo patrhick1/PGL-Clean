@@ -59,4 +59,7 @@ dist/
 
 # Temporary files
 tmp/
-temp/ 
+temp/
+
+# Test files
+tests/ 

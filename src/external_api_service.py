@@ -5,8 +5,12 @@ from dotenv import load_dotenv
 import requests
 import html
 import pprint # Import pprint
+from typing import Optional
+import logging
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 class PodscanFM:
     def __init__(self):
@@ -323,15 +327,19 @@ class InstantlyAPI:
             print(f"JSON decode error occurred while fetching emails: {json_err} - Response: {response.text if 'response' in locals() else 'No response object'}")
         return None
 
-    def list_leads_from_campaign(self, campaign_id: str, search: str = None):
+    def list_leads_from_campaign(self, campaign_id: str, limit: int = 100, starting_after: Optional[str] = None, search: Optional[str] = None, filter_str: Optional[str] = None):
         """
-        Fetches all leads from a specific Instantly campaign.
+        Fetches leads from a specific Instantly campaign, with optional search, filter, and pagination.
 
         Args:
             campaign_id (str): The UUID of the campaign.
+            limit (int): The number of items to return per page.
+            starting_after (str, optional): The ID of the last item in the previous page for pagination.
+            search (str, optional): A search string to filter leads.
+            filter_str (str, optional): A specific filter string (e.g., "FILTER_LEAD_LOST") to apply.
 
         Returns:
-            list: A list of all leads in the campaign, or an empty list if an error occurs or no leads are found.
+            list: A list of leads, or an empty list if an error occurs or no leads are found.
         """
         api_key = os.getenv("INSTANTLY_API_KEY")
         if not api_key:
@@ -341,52 +349,124 @@ class InstantlyAPI:
             print("Error: campaign_id must be provided.")
             return []
 
-        endpoint_url = "https://api.instantly.ai/api/v2/leads/list" 
+        endpoint_url = f"{self.base_url}/leads/list" 
         
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type":  "application/json"
         }
 
-        limit = 100  # Max allowed by Instantly API, updated from 10
         all_leads = []
-        starting_after = None # For pagination
+        current_starting_after = starting_after # Initialize for the first page if provided
 
         while True:
             payload = {
-                "campaign": campaign_id, # Corrected from "campaign_id"
+                "campaign": campaign_id,
                 "limit": limit,
             }
-            if starting_after:
-                payload["starting_after"] = starting_after
+            if current_starting_after:
+                payload["starting_after"] = current_starting_after
             if search:
                 payload["search"] = search
+            if filter_str: # Add filter if provided
+                payload["filter"] = filter_str
+            
+            print(f"Requesting Instantly leads with payload: {payload}")
             try:
-                response = requests.post(endpoint_url, json=payload, headers=headers)
+                response = requests.post(endpoint_url, json=payload, headers=headers, timeout=20) # Added timeout
                 response.raise_for_status()  # Stop on API error (4xx or 5xx response)
                 data = response.json()
             except requests.exceptions.HTTPError as http_err:
-                print(f"HTTP error occurred while fetching leads: {http_err} - {response.text}")
+                print(f"HTTP error occurred while fetching leads for campaign {campaign_id}: {http_err} - {response.text}")
                 break 
             except requests.exceptions.RequestException as req_err:
-                print(f"Request error occurred while fetching leads: {req_err}")
+                print(f"Request error occurred while fetching leads for campaign {campaign_id}: {req_err}")
                 break 
             except ValueError as json_err: # Includes JSONDecodeError
-                print(f"JSON decode error occurred while fetching leads: {json_err} - Response: {response.text}")
+                print(f"JSON decode error occurred while fetching leads for campaign {campaign_id}: {json_err} - Response: {response.text if 'response' in locals() else 'No response object'}")
                 break
 
-            leads_this_page = data.get("items", []) # Corrected from "data" to "items"
+            leads_this_page = data.get("items", []) 
             all_leads.extend(leads_this_page)
 
-            next_starting_after = data.get("next_starting_after") # Get cursor for next page
+            next_starting_after = data.get("next_starting_after")
 
-            # Done if there's no next page cursor or if the current page wasn't full
             if not next_starting_after or len(leads_this_page) < limit:
                 break
             
-            starting_after = next_starting_after # Set for the next iteration
+            current_starting_after = next_starting_after
         
         return all_leads
+
+    def delete_lead(self, lead_id: str):
+        """
+        Deletes a lead from Instantly.ai by its ID.
+
+        Args:
+            lead_id (str): The UUID of the lead to delete.
+
+        Returns:
+            requests.Response: The response object from the API call.
+                             Caller should check response.status_code.
+        """
+        api_key = os.getenv("INSTANTLY_API_KEY")
+        if not api_key:
+            logger.error("Error: INSTANTLY_API_KEY not found in environment variables for delete_lead.")
+            mock_response = requests.Response()
+            mock_response.status_code = 401 # Unauthorized
+            mock_response.reason = "API Key Missing"
+            return mock_response
+        
+        if not lead_id:
+            logger.error("Error: lead_id must be provided to delete_lead.")
+            mock_response = requests.Response()
+            mock_response.status_code = 400 # Bad Request
+            mock_response.reason = "Lead ID Missing"
+            return mock_response
+
+        endpoint_url = f"{self.base_url}/leads/{lead_id}"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+
+        response = None # Initialize response
+        try:
+            logger.debug(f"Attempting to DELETE {endpoint_url}")
+            response = requests.delete(endpoint_url, headers=headers, timeout=60) # Added timeout
+            # Log status immediately after the call
+            logger.debug(f"Instantly API DELETE response status for lead {lead_id}: {response.status_code if response else 'No Response Object'}")
+            # We will let the caller handle raise_for_status or status checking, 
+            # as 204 is success but has no JSON body.
+            return response
+        except requests.exceptions.Timeout as timeout_err:
+            logger.error(f"Timeout error occurred while deleting lead {lead_id}: {timeout_err}")
+            mock_response = requests.Response()
+            mock_response.status_code = 504 # Gateway Timeout
+            mock_response.reason = "Request Timeout"
+            return mock_response
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Request error occurred while deleting lead {lead_id}: {e}")
+            mock_response = requests.Response()
+            # Try to get status from the exception's response if available
+            if hasattr(e, 'response') and e.response is not None:
+                mock_response.status_code = e.response.status_code
+                mock_response.reason = e.response.reason
+                try:
+                    mock_response._content = e.response.content
+                except: # pylint: disable=bare-except
+                    pass # Best effort to set content
+            else:
+                mock_response.status_code = 500 # Generic server/request error
+                mock_response.reason = "Request Exception"
+            return mock_response
+        except Exception as e:
+            # Catch any other unexpected error during the request process
+            logger.error(f"Unexpected error during delete_lead for {lead_id} before returning response: {e}", exc_info=True)
+            mock_response = requests.Response()
+            mock_response.status_code = 500
+            mock_response.reason = "Unexpected Internal Error"
+            return mock_response
 
 if __name__ == "__main__":
     # podscan_fm = PodscanFM()

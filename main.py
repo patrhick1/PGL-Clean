@@ -71,6 +71,12 @@ from src.db_utils import (
 # Import the CampaignStatusTracker (now from src)
 from src.campaign_status_tracker import CampaignStatusTracker
 
+# Import necessary functions from instantly_leads_db.py
+from src.instantly_leads_db import create_clientsinstantlyleads_table, add_instantly_lead_record
+from src.external_api_service import InstantlyAPI # Already imported but good to note dependency
+# NEW IMPORT for the deleter script
+from src.instantly_lead_deleter import delete_leads_from_instantly, CAMPAIGN_IDS_TO_PROCESS, LEAD_STATUSES_TO_DELETE
+
 # -------------------------------------------------------------------
 # Configure logging
 logging.basicConfig(
@@ -547,7 +553,9 @@ def run_transcription_task(stop_flag):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
-        loop.run_until_complete(transcribe_endpoint(None, None, stop_flag)) # Assuming transcribe_endpoint can take None for full batch
+        # Corrected: Should call the main batch transcription function
+        from src.podcast_note_transcriber import get_podcast_audio_transcription # Ensure this is the correct function name
+        loop.run_until_complete(get_podcast_audio_transcription(stop_flag))
     except Exception as e:
         logger.error(f"Error in podcast transcription task: {e}")
     finally:
@@ -558,9 +566,11 @@ def run_transcription_task_free_tier(stop_flag):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
-        loop.run_until_complete(transcribe_endpoint_free_tier(None, None, stop_flag)) # Assuming transcribe_endpoint_free_tier can take None for full batch
+        # Corrected: Should call the main batch transcription function for free tier
+        from src.free_tier_episode_transcriber import get_podcast_audio_transcription_free_tier # Ensure this is the correct function name
+        loop.run_until_complete(get_podcast_audio_transcription_free_tier(stop_flag))
     except Exception as e:
-        logger.error(f"Error in podcast transcription task: {e}")
+        logger.error(f"Error in podcast transcription task (free tier): {e}") # Differentiated log message
     finally:
         loop.close()
 
@@ -816,6 +826,141 @@ def admin_dashboard(request: Request, user: dict = Depends(get_admin_user)):
             "role": user["role"]
         }
     )
+
+# --- Instantly.ai Leads Backup --- 
+# Define campaign IDs for backup (can be moved to config or env vars later)
+ALL_INSTANTLY_CAMPAIGN_IDS = [
+    "afe3a4d7-5ed7-4fd4-9f8f-cf4e2ddc843d",
+    "d52f85c0-8341-42d8-9e07-99c6b758fa0b",
+    "7b4a5386-8fa1-4059-8ded-398c0f48972b",
+    "186fcab7-7c86-4086-9278-99238c453470",
+    "ae1c1042-d10e-4cfc-ba4c-743a42550c85",
+    "ccbd7662-bbed-46ee-bd8f-1bc374646472",
+    "ad2c89bc-686d-401e-9f06-c6ff9d9b7430",
+    # "3816b624-2a1f-408e-91a9-b9f730d03e2b", # This one will be excluded
+    "60346de6-915c-43fa-9dfa-b77983570359",
+    "5b1053b5-8143-4814-a9dc-15408971eac8",
+    "02b1d9ff-0afe-4b64-ac15-a886f43bdbce",
+    "0725cdd8-b090-4da4-90af-6ca93ac3c267",
+    "640a6822-c1a7-48c7-8385-63b0d4c283fc",
+    "540b0539-f1c2-4612-94d8-df6fab42c2a7",
+    "b55c61b6-262c-4390-b6e0-63dfca1620c2"
+]
+EXCLUDED_INSTANTLY_CAMPAIGN_ID = "3816b624-2a1f-408e-91a9-b9f730d03e2b"
+
+def run_instantly_leads_backup_job(stop_flag: Optional[threading.Event] = None):
+    """Function to run the Instantly.ai leads backup process."""
+    logger.info("Starting Instantly.ai leads backup job...")
+    try:
+        create_clientsinstantlyleads_table() # Ensure table exists
+
+        campaign_ids_to_backup = [cid for cid in ALL_INSTANTLY_CAMPAIGN_IDS if cid != EXCLUDED_INSTANTLY_CAMPAIGN_ID]
+
+        if not campaign_ids_to_backup:
+            logger.info("No campaign IDs specified for Instantly backup. Skipping.")
+            return
+
+        logger.info(f"--- Starting Lead Backup for {len(campaign_ids_to_backup)} Campaign(s) ---")
+        instantly_service = InstantlyAPI()
+        total_leads_fetched_all_campaigns = 0
+        total_leads_added_all_campaigns = 0
+        total_leads_failed_all_campaigns = 0
+
+        for campaign_idx, current_campaign_id in enumerate(campaign_ids_to_backup):
+            if stop_flag and stop_flag.is_set():
+                logger.info("Instantly leads backup job stopped by flag.")
+                break
+            logger.info(f"Processing Campaign {campaign_idx + 1}/{len(campaign_ids_to_backup)}: ID {current_campaign_id}")
+            
+            leads_from_api = instantly_service.list_leads_from_campaign(current_campaign_id)
+
+            if leads_from_api:
+                logger.info(f"Fetched {len(leads_from_api)} leads from Instantly API for campaign {current_campaign_id}.")
+                total_leads_fetched_all_campaigns += len(leads_from_api)
+                current_campaign_added_count = 0
+                current_campaign_failed_count = 0
+                
+                for i, lead_data in enumerate(leads_from_api):
+                    if stop_flag and stop_flag.is_set():
+                        logger.info("Instantly leads backup for current campaign stopped by flag.")
+                        break
+                    if (i + 1) % 100 == 0 or i == len(leads_from_api) - 1:
+                         logger.info(f"  Processing lead {i+1}/{len(leads_from_api)} for campaign {current_campaign_id}...")
+                    
+                    inserted_id = add_instantly_lead_record(lead_data)
+                    if inserted_id:
+                        current_campaign_added_count += 1
+                    else:
+                        current_campaign_failed_count += 1
+                
+                total_leads_added_all_campaigns += current_campaign_added_count
+                total_leads_failed_all_campaigns += current_campaign_failed_count
+                logger.info(f"Backup for campaign {current_campaign_id} complete.")
+                logger.info(f"  Successfully processed/upserted: {current_campaign_added_count} lead(s).")
+                if current_campaign_failed_count > 0:
+                    logger.info(f"  Failed to process/upsert: {current_campaign_failed_count} lead(s).")
+            elif isinstance(leads_from_api, list) and not leads_from_api:
+                logger.info(f"No leads found in Instantly campaign {current_campaign_id} or an API error occurred.")
+            else:
+                logger.warning(f"Could not fetch leads from API for campaign {current_campaign_id}. Unexpected return type or error.")
+            if stop_flag and stop_flag.is_set(): break # break outer loop too
+        
+        logger.info("--- Overall Instantly Leads Backup Summary ---")
+        logger.info(f"Total campaigns processed: {len(campaign_ids_to_backup) if not (stop_flag and stop_flag.is_set()) else campaign_idx + 1}")
+        logger.info(f"Total leads fetched from API across all processed campaigns: {total_leads_fetched_all_campaigns}")
+        logger.info(f"Total leads successfully added/updated in DB: {total_leads_added_all_campaigns}")
+        if total_leads_failed_all_campaigns > 0:
+            logger.info(f"Total leads failed to add/update in DB: {total_leads_failed_all_campaigns}")
+        logger.info("Instantly.ai leads backup job finished.")
+
+    except Exception as e:
+        logger.error(f"Error during Instantly.ai leads backup job: {e}", exc_info=True)
+
+@app.post("/trigger-instantly-backup")
+async def trigger_instantly_backup_manually(
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(get_admin_user) # Or get_current_user if staff can also trigger
+):
+    """Endpoint to manually trigger the Instantly.ai leads backup."""
+    logger.info(f"Manual trigger for Instantly.ai leads backup received by user: {user['username']}.")
+    task_id = str(uuid.uuid4()) # Generate a unique task ID
+    # We can use the existing task_manager if we want to make this stoppable
+    # For now, just running in background_tasks for simplicity
+    background_tasks.add_task(run_instantly_leads_backup_job) # No stop_flag passed for simple background task
+    return {"message": "Instantly.ai leads backup job started in the background.", "task_id": task_id, "status": "processing"}
+
+# --- End Instantly.ai Leads Backup ---
+
+# --- Instantly.ai Leads Deletion ---
+def run_instantly_leads_deletion_job(stop_flag: Optional[threading.Event] = None):
+    """Function to run the Instantly.ai leads deletion process."""
+    logger.info("Starting Instantly.ai leads deletion job...")
+    try:
+        # Ensure the main table exists (though deleter doesn't write to it, it reads via get_instantly_lead_by_id)
+        create_clientsinstantlyleads_table() 
+        # Run the deletion process (defaults to dry_run=True for safety)
+        # Pass the globally defined CAMPAIGN_IDS_TO_PROCESS and LEAD_STATUSES_TO_DELETE
+        # You might want to make dry_run configurable via endpoint parameter or env var for actual deletion.
+        delete_leads_from_instantly(
+            campaign_ids=CAMPAIGN_IDS_TO_PROCESS, 
+            statuses_to_delete=LEAD_STATUSES_TO_DELETE, 
+            dry_run=False # IMPORTANT: Changed to False for actual deletion via API
+        )
+        logger.info("Instantly.ai leads deletion job finished.")
+    except Exception as e:
+        logger.error(f"Error during Instantly.ai leads deletion job: {e}", exc_info=True)
+
+@app.post("/trigger-instantly-lead-deletion")
+async def trigger_instantly_lead_deletion_manually(
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(get_admin_user) 
+):
+    """Endpoint to manually trigger the Instantly.ai leads deletion."""
+    logger.info(f"Manual trigger for Instantly.ai leads deletion received by user: {user['username']}.")
+    # For now, running in background_tasks. If it becomes very long, consider TaskManager.
+    background_tasks.add_task(run_instantly_leads_deletion_job)
+    return {"message": "Instantly.ai leads deletion job started in the background (Dry Run Mode by default).", "status": "processing"}
+# --- End Instantly.ai Leads Deletion ---
 
 if __name__ == "__main__":
     import uvicorn

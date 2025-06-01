@@ -21,7 +21,8 @@ from .config import (
     WEEKS_TO_REPORT,
     TRACKED_STATUSES,
     STATUSES_TO_IGNORE_IN_TOTAL,
-    REPORT_ROW_ORDER
+    REPORT_ROW_ORDER,
+    EXCLUDED_CLIENTS_FROM_REPORT
 )
 
 load_dotenv()
@@ -261,12 +262,19 @@ class CampaignStatusTracker:
             logger.info("No client names found in history table. Exiting.")
             return
 
-        logger.info(f"Processing {len(client_names_from_history)} clients found in history records.")
+        # Filter out excluded clients
+        included_clients = [name for name in client_names_from_history if name not in EXCLUDED_CLIENTS_FROM_REPORT]
+
+        if not included_clients:
+            logger.info("No clients to report on after exclusions. Exiting.")
+            return
+
+        logger.info(f"Processing {len(included_clients)} clients after excluding {len(client_names_from_history) - len(included_clients)} clients.")
 
         all_client_slack_reports = [] # List to collect reports for Slack
 
         # Iterate through each client and update/create spreadsheet
-        for client_name in client_names_from_history:
+        for client_name in included_clients: # Iterate over the filtered list
             logger.info(f"\nProcessing client: {client_name}")
             client_report_data = self.update_single_client_spreadsheet(client_name)
             if client_report_data:

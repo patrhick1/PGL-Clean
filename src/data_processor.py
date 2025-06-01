@@ -178,8 +178,6 @@ class DataProcessor:
         # Prepare the dictionary for Airtable update, matching actual Airtable field names
         field_to_update = {
             "Podcast Name": podcast_name,
-            "Host Name": publisher,
-            # "Podcast URL": podcast_url, # Field does not exist in Airtable
             "Description": podcast_description, # Correct Airtable field name
             "Email": email,
             "RSS Feed": rss_url,
@@ -230,6 +228,7 @@ class DataProcessor:
             field_to_update['Campaign'] = [campaign_id]
             try:
                 # Create the new podcast record
+                field_to_update['Host Name'] = publisher
                 new_record = airtable_service.create_record('Podcasts', field_to_update)
                 if new_record:
                     new_podcast_id = new_record.get('id')

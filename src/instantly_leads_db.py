@@ -193,14 +193,34 @@ def add_instantly_lead_record(lead_api_data):
     # However, for a backup, explicit NULLs for missing data from API might be desired.
     # The .get(key) method already returns None if key is not found, which psycopg2 handles as NULL.
 
-    columns = insert_data.keys()
+    columns = list(insert_data.keys()) # Use list() to ensure it's a list for psycopg2
     # sql.Placeholder(col) creates named placeholders like %(col_name)s
     # So the second argument to execute should be a dictionary.
-    values_placeholders = [sql.Placeholder(col) for col in columns] 
-    
-    insert_query = sql.SQL("INSERT INTO clientsinstantlyleads ({}) VALUES ({}) RETURNING lead_id").format(
-        sql.SQL(', ').join(map(sql.Identifier, columns)),
-        sql.SQL(', ').join(values_placeholders)
+    values_placeholders = [sql.Placeholder(col) for col in columns]
+
+    # --- UPSERT LOGIC --- 
+    # Create the SET part for the ON CONFLICT DO UPDATE clause
+    # Exclude lead_id from update, as it's the conflict target
+    # Also, explicitly handle backup_creation_timestamp: don't update it on conflict, keep original backup time.
+    update_columns = [col for col in columns if col not in ['lead_id', 'backup_creation_timestamp']]
+    set_clause = sql.SQL(", ").join([
+        sql.SQL("{} = EXCLUDED.{}").format(sql.Identifier(col), sql.Identifier(col))
+        for col in update_columns
+    ])
+    # Always update a field like 'timestamp_updated' from the new data on conflict
+    # and perhaps a new 'last_synced_timestamp' in your table to current time.
+    # For now, we ensure all fields from EXCLUDED are updated except primary key and original backup time.
+
+    insert_query = sql.SQL("""
+        INSERT INTO clientsinstantlyleads ({columns})
+        VALUES ({values})
+        ON CONFLICT (lead_id)
+        DO UPDATE SET {set_clause}, backup_creation_timestamp = clientsinstantlyleads.backup_creation_timestamp -- Keep original backup time
+        RETURNING lead_id, (xmax = 0) AS inserted; -- xmax = 0 indicates an INSERT occurred
+    """).format(
+        columns=sql.SQL(', ').join(map(sql.Identifier, columns)),
+        values=sql.SQL(', ').join(values_placeholders),
+        set_clause=set_clause
     )
     
     # Prepare the dictionary for execute, wrapping dicts for JSONB columns with Json()
@@ -214,13 +234,17 @@ def add_instantly_lead_record(lead_api_data):
     try:
         with conn.cursor() as cur:
             cur.execute(insert_query, execute_dict) # Pass the dictionary directly
-            inserted_lead_id = cur.fetchone()[0]
+            result = cur.fetchone()
+            inserted_lead_id = result[0]
+            was_inserted = result[1] # True if INSERT, False if UPDATE
             conn.commit()
-            # print(f"Lead record {inserted_lead_id} added to clientsinstantlyleads successfully.")
+            if was_inserted:
+                print(f"New lead record {inserted_lead_id} added to clientsinstantlyleads successfully.")
+            else:
+                print(f"Existing lead record {inserted_lead_id} updated in clientsinstantlyleads successfully.")
             return inserted_lead_id
-    except psycopg2.IntegrityError as e:
-        print(f"Integrity error adding lead {lead_api_data.get('id')}: {e}")
-        print("This might be due to a duplicate lead_id if not using ON CONFLICT.")
+    except psycopg2.IntegrityError as e: # Should be less common with ON CONFLICT
+        print(f"Integrity error processing lead {lead_api_data.get('id')}: {e}")
         if conn:
             conn.rollback()
         return None

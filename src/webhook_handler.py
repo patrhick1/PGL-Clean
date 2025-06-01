@@ -19,6 +19,7 @@ from datetime import datetime
 from collections import defaultdict
 from typing import Dict, List, Any, Optional, Tuple
 import threading
+import re
 
 # Import Replit DB for persistence
 try:
@@ -39,6 +40,24 @@ logger = logging.getLogger(__name__)
 
 # Key for storing last processed time in Replit DB
 LAST_PROCESSED_TIME_KEY = "pgl_angles_last_processed_time"
+
+# NEW HELPER FUNCTION for name normalization
+def normalize_name_comparison(name: Optional[str]) -> Optional[str]:
+    if not name:
+        return None
+    # Lowercase
+    name = name.lower()
+    # Remove common titles
+    name = re.sub(r'\b(mr|ms|mrs|dr|prof|rev)\b\.?\s*', '', name, flags=re.IGNORECASE)
+    # Remove extra whitespace and punctuation that's not part of a name
+    name = re.sub(r'[^\w\s,-]', '', name) # Keep alphanumeric, whitespace, comma, hyphen
+    name = ' '.join(name.split()) # Normalize whitespace
+    
+    # Handle multiple names: sort them if separated by common delimiters
+    # This helps if order is different but names are the same
+    parts = re.split(r'\s*&\s*|\s*and\s*|\s*,\s*(?![^()]*\))', name) # Split by '&', 'and', or ', ' (not inside parentheses)
+    normalized_parts = sorted([p.strip() for p in parts if p.strip()])
+    return ', '.join(normalized_parts) if normalized_parts else None
 
 
 def read_last_processed_time():
@@ -240,32 +259,109 @@ async def process_single_podcast(podcast: Dict, openai_service: OpenAIService) -
 
         resp_text, queries, chunks = query_gemini_with_grounding(query)
         
-        # Prepare the prompt
-        raw_text = (f"Using the following information, determine who the host is from this information. Return only the host name.\n"
-                    f"Podcast Name: {podcast_name}\n"
-                    f"The Host rollup is: {host_rollup}\n"
-                    f"Email address: {email}\n"
-                    f"Podcast description: {podcast_description}\n"
-                    f"Gemini, google searched for the podcast host and the results are: {resp_text}")
+        # UPDATED raw_text_for_analysis and prompt_for_openai
+        raw_text_for_analysis = (
+            f"Contextual Information Provided:\n"
+            f"1. Podcast Name: \"{podcast_name}\"\n"
+            f"2. Potential Host (from episode rollups, if available): \"{host_rollup if host_rollup else 'Not available'}\"\n"
+            f"3. Podcast Contact Email (if available): \"{email if email else 'Not available'}\"\n"
+            f"4. Podcast Description Snippet: \"{podcast_description[:1000]}\"\n"
+            f"5. Google Search Results for host query: \"{resp_text[:1000]}\"\n\n" # Limit length
+
+            f"Task: Critically analyze ALL the provided contextual information to identify the primary host(s) of the podcast.\n"
+            f"Instructions for your response:\n"
+            f"- Host: Identify the host(s). If multiple, separate with a comma. If uncertain or no host clearly identified, return null or empty string for 'Host'.\n"
+            f"- confidence: Provide a confidence score (0.0 to 1.0). Assign high confidence (e.g., >=0.9) ONLY if there is strong, unambiguous, and corroborating evidence. For example, if the 'Host Rollup' matches a name strongly indicated as host in 'Google Search Results' or 'Podcast Description'. If evidence is weak, conflicting, or relies on a single, uncorroborated source, assign a lower confidence score.\n"
+            f"- evidence_source: Specify the PRIMARY source from the 'Contextual Information Provided' (e.g., 'Host Rollup', 'Google Search Results', 'Podcast Description and Email') that most strongly supports your host identification.\n"
+            f"- evidence_text: Quote the EXACT text snippets or specific reasoning from the context that led to your identification, confidence, and source. Explain how you weighed different pieces of information. If 'Host Rollup' was used, state if it matched other findings.\n"
+            f"- discrepancies_found: If you find conflicting information between sources (e.g., Host Rollup suggests 'Alice' but Google Search suggests 'Bob' is the host), describe this discrepancy. If no major discrepancies, state 'None'.\n"
+            f"Prioritize accuracy and be conservative in your judgment. It's better to have lower confidence than to be wrong."
+        )
+
+        prompt_for_openai = ("Based *only* on the contextual information I've provided, identify the podcast host(s), your confidence, the primary evidence source, the supporting evidence text, and any discrepancies found. "
+                             "Follow the structured output format precisely.")
         
-        # Determine who the host is using OpenAI
-        prompt = "Determine who the exact host is from this information. Return only the host name."
         structured_data = openai_service.transform_text_to_structured_data(
-            prompt=prompt,
-            raw_text=raw_text,
-            data_type='host_name',
-            workflow='enrich_host_name',
+            prompt=prompt_for_openai,
+            raw_text=raw_text_for_analysis,
+            data_type='host_name_analysis', 
+            workflow='enrich_host_name_v3', # New version
             podcast_id=record_id
         )
         
-        # Extract the host name
-        host_name = structured_data.get('Host', '')
+        # Extract the host name, confidence, and evidence
+        host_name = structured_data.get('Host')
+        confidence = structured_data.get('confidence')
+        evidence_source = structured_data.get('evidence_source')
+        evidence_text = structured_data.get('evidence_text', '')
+        discrepancies = structured_data.get('discrepancies_found')
+
         result['enriched_host'] = host_name
+        result['confidence'] = confidence
+        result['evidence_source'] = evidence_source
+        result['evidence_text'] = evidence_text
+        result['discrepancies'] = discrepancies
+        
+        # UPDATED HostConfirmed Logic
+        host_confirmed = False
+        confirmation_reason = "Initial state: Not confirmed."
+
+        if host_name and confidence is not None: 
+            normalized_openai_host = normalize_name_comparison(host_name)
+            normalized_rollup_host = normalize_name_comparison(host_rollup) if host_rollup else None
+
+            if confidence >= 0.90 and normalized_rollup_host and normalized_openai_host == normalized_rollup_host:
+                if "Host Rollup" in (evidence_source or ""):
+                    host_confirmed = True
+                    confirmation_reason = f"Strong: OpenAI Conf ({confidence:.2f}) matches Host Rollup ('{host_rollup}'). Evidence source: {evidence_source}."
+                else:
+                    host_confirmed = True
+                    confirmation_reason = f"Strong (Implicit Rollup Match): OpenAI Conf ({confidence:.2f}) matches Host Rollup ('{host_rollup}'). OpenAI cited: {evidence_source}."
+            
+            if not host_confirmed and confidence >= 0.95:
+                strong_sources = ["Google Search Results", "Podcast Description"]
+                if any(src in (evidence_source or "") for src in strong_sources):
+                    if normalized_rollup_host and normalized_openai_host != normalized_rollup_host and not discrepancies:
+                        confirmation_reason = f"High OpenAI Conf ({confidence:.2f}) but potential conflict with Host Rollup ('{host_rollup}') not addressed in discrepancies. OpenAI cited: {evidence_source}."
+                        logger.warning(f"Record {record_id}: Host '{host_name}' (Conf: {confidence:.2f}) from '{evidence_source}' differs from Rollup '{host_rollup}' but no discrepancy noted by AI. Not confirming.")
+                    elif discrepancies and "None" not in (discrepancies or "None"):
+                        confirmation_reason = f"High OpenAI Conf ({confidence:.2f}) but AI noted discrepancies: '{discrepancies}'. OpenAI cited: {evidence_source}."
+                        logger.warning(f"Record {record_id}: Host '{host_name}' (Conf: {confidence:.2f}) has noted discrepancies: '{discrepancies}'. Not confirming.")
+                    else:
+                        host_confirmed = True
+                        confirmation_reason = f"Strong: OpenAI Very High Conf ({confidence:.2f}) from strong source ('{evidence_source}'). No major conflict with Rollup if present."
+                else:
+                    confirmation_reason = f"High OpenAI Conf ({confidence:.2f}) but evidence source ('{evidence_source}') not considered strong enough on its own, or Rollup conflict."
+
+            if not host_confirmed and confidence >= 0.75 and normalized_rollup_host and normalized_openai_host == normalized_rollup_host:
+                if "Host Rollup" in (evidence_source or ""):
+                    host_confirmed = True
+                    confirmation_reason = f"Moderate: OpenAI Conf ({confidence:.2f}) but perfect Host Rollup ('{host_rollup}') match & cited as source."
+                else:
+                    confirmation_reason = f"Moderate OpenAI Conf ({confidence:.2f}), matches Rollup, but Rollup not primary AI source. AI cited: {evidence_source}."
+
+            if not host_confirmed and host_name:
+                if confidence < 0.75:
+                    confirmation_reason = f"Low OpenAI Confidence ({confidence:.2f})."
+                elif normalized_rollup_host and normalized_openai_host != normalized_rollup_host:
+                     confirmation_reason += f" Mismatch with Host Rollup ('{host_rollup}' vs OpenAI: '{host_name}')."
+                if not confirmation_reason or confirmation_reason == "Initial state: Not confirmed.":
+                    confirmation_reason = f"OpenAI Conf ({confidence:.2f}). Host Rollup: '{host_rollup}'. OpenAI Host: '{host_name}'. Evidence: '{evidence_source}'. No rule met for confirmation."
+
+        elif not host_name:
+            confirmation_reason = "No host name returned by OpenAI."
+        
+        result['host_confirmed_by_logic'] = host_confirmed
+        result['confirmation_reason'] = confirmation_reason
+
+        if host_confirmed:
+            logger.info(f"Host identification for {record_id} CONFIRMED as '{host_name}'. Reason: {confirmation_reason}")
+        else:
+            logger.info(f"Host identification for {record_id} (Host: '{host_name}', Conf: {confidence}, Source: {evidence_source}) NOT CONFIRMED. Reason: {confirmation_reason}")
         
         # Set token usage - this would ideally come from the API response
-        # but using estimates based on text length for now
         result['tokens_used'] = {
-            'input': len(raw_text) // 4,  # rough estimate
+            'input': len(raw_text_for_analysis) // 4,  # rough estimate
             'output': len(host_name) // 4  # rough estimate
         }
         
@@ -310,12 +406,28 @@ async def process_podcasts_batch(podcasts: List[Dict], openai_service: OpenAISer
             # Update Airtable if requested and processing was successful
             if update_airtable and result['success']:
                 try:
+                    airtable_update_data = {'Host Name': result['enriched_host']}
+                    
+                    # Use the new confirmation logic's output
+                    host_confirmed_status = result.get('host_confirmed_by_logic', False)
+                    airtable_update_data['HostConfirmed'] = host_confirmed_status
+                    
+                    # Optionally, store the reason and AI's confidence for review in Airtable
+                    if 'confirmation_reason' in result:
+                       airtable_update_data['Host Confirmation Reason'] = result['confirmation_reason'][:990] # Truncate
+                    if 'confidence' in result and result['confidence'] is not None:
+                       airtable_update_data['AI Host Confidence'] = result['confidence']
+                    if 'evidence_source' in result:
+                        airtable_update_data['AI Evidence Source'] = result['evidence_source']
+                    if 'discrepancies' in result and result['discrepancies']:
+                        airtable_update_data['AI Discrepancies'] = result['discrepancies']
+
                     airtable_service.update_record(
                         'Podcasts', 
                         result['record_id'], 
-                        {'Host Name': result['enriched_host']}
+                        airtable_update_data
                     )
-                    logger.info(f"Updated host name for {result['record_id']} to '{result['enriched_host']}'")
+                    logger.info(f"Updated host name for {result['record_id']} to '{result['enriched_host']}' (HostConfirmed: {host_confirmed_status}). Reason: {result.get('confirmation_reason')}")
                 except Exception as e:
                     logger.error(f"Failed to update Airtable record {result['record_id']}: {e}")
                     result['error_reason'] = f"Airtable update failed: {e}"

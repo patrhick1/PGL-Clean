@@ -307,4 +307,62 @@ async function triggerDailyReport() {
     } catch (error) {
         showStatusMessage(`Error: ${error.message}`, 'error');
     }
+}
+
+// NEW FUNCTION: Trigger Instantly.ai Leads Backup
+async function triggerInstantlyBackup() {
+    // Confirm before triggering the backup
+    if (!confirm("This will start the Instantly.ai leads backup process. This may take some time depending on the number of leads. Continue?")) {
+        return;
+    }
+
+    try {
+        showStatusMessage('Starting Instantly.ai leads backup...', 'info');
+        
+        const response = await fetch('/trigger-instantly-backup', {
+            method: 'POST'
+        });
+        const data = await response.json();
+        
+        if (response.ok) {
+            showStatusMessage(data.message || 'Instantly.ai leads backup job started successfully!', 'success');
+            if (data.task_id) {
+                // Optionally, auto-populate task ID fields if you integrate with TaskManager later
+                // document.getElementById('stop-task-id').value = data.task_id;
+                // document.getElementById('check-task-id').value = data.task_id;
+                // listRunningTasks(); // If integrated with TaskManager
+            }
+        } else {
+            showStatusMessage(`Error: ${data.detail || data.error || 'Unknown error'}`, 'error');
+        }
+    } catch (error) {
+        showStatusMessage(`Error: ${error.message}`, 'error');
+    }
+}
+
+// NEW FUNCTION: Trigger Instantly.ai Lead Deletion
+async function triggerInstantlyLeadDeletion() {
+    // Confirm before triggering the deletion process, emphasizing dry run by default
+    if (!confirm("This will start the Instantly.ai lead DELETION process. By default, it runs in DRY RUN mode (no actual deletions). Continue?")) {
+        return;
+    }
+
+    try {
+        showStatusMessage('Starting Instantly.ai lead deletion process (Dry Run Mode)... ', 'info');
+        
+        const response = await fetch('/trigger-instantly-lead-deletion', {
+            method: 'POST'
+        });
+        const data = await response.json();
+        
+        if (response.ok) {
+            showStatusMessage(data.message || 'Instantly.ai lead deletion job started successfully!', 'success');
+            // Optionally, handle task ID if you integrate this with TaskManager later
+            // if (data.task_id) { ... }
+        } else {
+            showStatusMessage(`Error: ${data.detail || data.error || 'Unknown error'}`, 'error');
+        }
+    } catch (error) {
+        showStatusMessage(`Error: ${error.message}`, 'error');
+    }
 } 

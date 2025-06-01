@@ -100,6 +100,32 @@ class getHostName(BaseModel):
     )
 
 
+# UPDATED Pydantic model for host name analysis
+class HostNameAnalysis(BaseModel):
+    Host: Optional[str] = Field(
+        None,
+        description="The identified primary host name(s). If multiple, separate by comma. If none found or uncertain, should be null or an empty string."
+    )
+    confidence: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Confidence score (0.0 to 1.0) for the host identification. Be conservative; high confidence requires strong, unambiguous evidence."
+    )
+    evidence_source: Optional[str] = Field(
+        None,
+        description="The primary source from the input context that supports this identification (e.g., 'Host Rollup', 'Podcast Description', 'Google Search Results', 'Email Address analysis')."
+    )
+    evidence_text: str = Field(
+        ...,
+        description="Specific text snippet(s) or reasoning from the provided context that support the host identification and confidence. Clearly explain if information is conflicting or synthesized."
+    )
+    discrepancies_found: Optional[str] = Field(
+        None,
+        description="Describe any discrepancies found between different information sources (e.g., Host Rollup vs. Google Search). If no major discrepancies, state 'None'."
+    )
+
+
 class StructuredData(BaseModel):
     """
     This model defines the structure of the data that we expect from our 
@@ -177,6 +203,8 @@ class OpenAIService:
                     response_format = GetTopicDescriptions
                 elif data_type == 'host_name':
                     response_format = getHostName
+                elif data_type == 'host_name_analysis':
+                    response_format = HostNameAnalysis
 
                 # Set the model name - constant for this method
                 model = "gpt-4o-2024-08-06"
